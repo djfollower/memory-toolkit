@@ -1,0 +1,54 @@
+{
+  "name": "com.dungphan.memorytoolkit",
+  "version": "0.4.0",
+  "displayName": "Memory Toolkit",
+  "description": "Exemplary memory-handling utilities for Unity: object/GameObject pooling, collection and StringBuilder caches, a per-frame linear allocator over native memory, pool warm-up and low-memory trimming. Designed to minimize GC pressure and heap fragmentation.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Dung Phan",
+    "email": "dung.phanv@gmail.com"
+  },
+  "keywords": [
+    "memory",
+    "pooling",
+    "gc",
+    "performance"
+  ],
+  "samples": [
+    {
+      "displayName": "Pooled Spawner",
+      "description": "Projectiles from a warmed pool that release themselves — Instantiate/Destroy replaced by get/release.",
+      "path": "Samples~/PooledSpawner"
+    },
+    {
+      "displayName": "Scene Scope Level",
+      "description": "A level that owns its memory: installer warms pools in a scene scope, everything is freed on scene unload, blocking cleanup only behind the load.",
+      "path": "Samples~/SceneScopeLevel"
+    },
+    {
+      "displayName": "Match Scope",
+      "description": "Round-based lifetimes shorter than the scene: unit pool, AI arena, and native score table owned by a match scope and freed in one Dispose.",
+      "path": "Samples~/MatchScope"
+    },
+    {
+      "displayName": "Frame Scratch Query",
+      "description": "Per-frame physics query with derived data in the frame arena — 0 B GC alloc per Update.",
+      "path": "Samples~/FrameScratchQuery"
+    },
+    {
+      "displayName": "Zero-Alloc HUD",
+      "description": "HUD text via StringBuilderCache, rebuilt only when values change.",
+      "path": "Samples~/ZeroAllocHud"
+    },
+    {
+      "displayName": "Permanent Configs",
+      "description": "Login scene loads configs and pins them to the Permanent scope; the scene's own memory stays momentary and dies on unload.",
+      "path": "Samples~/PermanentConfigs"
+    },
+    {
+      "displayName": "Low Memory Response",
+      "description": "A game-side cache that sheds entries on MemoryManager.LowMemoryTrimmed alongside the automatic pool trim.",
+      "path": "Samples~/LowMemoryResponse"
+    }
+  ]
+}
