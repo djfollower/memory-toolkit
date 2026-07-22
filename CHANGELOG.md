@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.5.0] - 2026-07-22
+
+Driven by adopting the toolkit in an existing production codebase (see `docs/ADOPTION.md`). Every
+item here is a gap that real integration exposed and the README's API tour did not.
+
+### Added
+- **Component-typed pooling**: `pool.Get<T>()` and `pool.Release(component)`. Game code is
+  component-typed while the pool was GameObject-typed, forcing a `GetComponent` into the exact hot
+  path the pool exists to optimize. The lookup is now resolved once per instance and cached on its
+  `PooledInstance`. `Get<T>` throws when the prefab has no `T` rather than returning a null that gets
+  dereferenced frames later.
+- **`PooledRef<T>` and `PooledInstance.Generation`**: a reference that knows whether it still points
+  at the same *occupant* of a pooled instance. Pooling breaks the assumption that non-null means
+  still-yours — an instance released and re-taken passes every null check while belonging to someone
+  else. Capture a `PooledRef` before an `await`, check `TryGet` after. Non-pooled components are
+  supported and are alive while simply non-null, so call sites need not know the difference.
+- **`PoolSafetyValidator`** (Assets > Memory Toolkit > Validate Pool Safety, plus an API taking a
+  `List<Issue>`): static pre-flight checks for "can this prefab survive pooling?" — ParticleSystem
+  Stop Action set to Destroy (self-deleting instances, including child systems), `OnDestroy` doing
+  cleanup that will silently stop running, rigidbodies with no `IPoolable` to reset physics state,
+  missing scripts, and `Awake`/`Start`/`OnEnable` semantics that change under reuse.
+- `docs/ADOPTION.md`: how to triage an existing codebase for lifetime boundaries, what order to land
+  the toolkit in, and the pooling hazards that only surface in real projects.
+
+### Changed
+- **`MemoryScope.Dispose` order is now specified and guaranteed**: strict reverse of registration
+  (LIFO) across pools, arenas, and registered disposables alike. Previously pools were always
+  disposed before registered disposables regardless of registration order, which meant a
+  hand-ordered teardown method could not be safely replaced by a single `Dispose` — the first step of
+  adopting scopes. Register in dependency order and the ordering now carries over.
+- `GameObjectPool` resolves each instance's `PooledInstance` once at creation instead of calling
+  `GetComponent` on every get and release.
+
 ## [0.4.0] - 2026-07-21
 
 ### Added

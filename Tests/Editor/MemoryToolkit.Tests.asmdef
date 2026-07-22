@@ -3,6 +3,7 @@
     "rootNamespace": "MemoryToolkit.Tests",
     "references": [
         "MemoryToolkit.Runtime",
+        "MemoryToolkit.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

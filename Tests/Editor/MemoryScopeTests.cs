@@ -4,6 +4,7 @@ using MemoryToolkit;
 using MemoryToolkit.Pooling;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace MemoryToolkit.Tests
@@ -71,6 +72,56 @@ namespace MemoryToolkit.Tests
             scope.Dispose();
 
             Assert.That(order, Is.EqualTo(new[] { "second", "first" }));
+        }
+
+        [Test]
+        public void Dispose_OrdersPoolsAndDisposables_ByReverseRegistration()
+        {
+            // The guarantee that lets a hand-ordered teardown method be replaced
+            // by a single Dispose: pools are not a special case that always goes
+            // first, they take their place in registration order like anything else.
+            MemoryScope scope = MemoryManager.CreateScope("Match");
+            var order = new List<string>();
+
+            scope.Register(new TrackingDisposable("service", order));
+            scope.GetPool(_prefab); // registered after the service it depends on
+            scope.Register(new TrackingDisposable("late", order));
+
+            var otherPrefab = new GameObject("OtherPrefab");
+            try
+            {
+                scope.Dispose();
+
+                // "late" and the pool both registered after "service", so both
+                // are torn down before it.
+                Assert.That(order, Is.EqualTo(new[] { "late", "service" }));
+            }
+            finally
+            {
+                Object.DestroyImmediate(otherPrefab);
+            }
+        }
+
+        [Test]
+        public void Dispose_ContinuesPastAThrowingDisposable()
+        {
+            MemoryScope scope = MemoryManager.CreateScope("Match");
+            var order = new List<string>();
+            scope.Register(new TrackingDisposable("survivor", order));
+            scope.Register(new ThrowingDisposable());
+
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                Assert.DoesNotThrow(scope.Dispose);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+
+            Assert.That(order, Is.EqualTo(new[] { "survivor" }),
+                "one faulty disposable must not strand the rest of the scope");
         }
 
         [Test]
@@ -215,6 +266,11 @@ namespace MemoryToolkit.Tests
             }
 
             public void Dispose() => _order.Add(_name);
+        }
+
+        private sealed class ThrowingDisposable : IDisposable
+        {
+            public void Dispose() => throw new InvalidOperationException("boom");
         }
     }
 }

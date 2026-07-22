@@ -1,6 +1,8 @@
+using System;
 using MemoryToolkit.Pooling;
 using NUnit.Framework;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace MemoryToolkit.Tests
 {
@@ -114,6 +116,102 @@ namespace MemoryToolkit.Tests
 
             Assert.That(_pool.CountInactive, Is.EqualTo(1));
             Assert.That(_pool.CountActive, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void GetTyped_ReturnsComponent_AndServesRepeatCallsFromCache()
+        {
+            _prefab.AddComponent<BoxCollider>();
+            var pool = new GameObjectPool(_prefab, defaultCapacity: 2, maxSize: 4);
+            try
+            {
+                BoxCollider first = pool.Get<BoxCollider>();
+                Assert.That(first, Is.Not.Null);
+                Assert.That(first.gameObject.activeSelf, Is.True);
+
+                pool.Release(first); // component overload, no .gameObject at the call site
+                Assert.That(pool.CountInactive, Is.EqualTo(1));
+
+                BoxCollider second = pool.Get<BoxCollider>();
+                Assert.That(second, Is.SameAs(first), "same instance, and the cached component with it");
+            }
+            finally
+            {
+                pool.Dispose();
+            }
+        }
+
+        [Test]
+        public void GetTyped_Throws_WhenPrefabLacksComponent()
+        {
+            // A silent null here would be dereferenced frames later, far from
+            // the actual mistake — so it fails at the call site instead.
+            Assert.Throws<InvalidOperationException>(() => _pool.Get<BoxCollider>());
+            Assert.That(_pool.CountActive, Is.EqualTo(0), "the failed Get must not leak an active instance");
+        }
+
+        [Test]
+        public void Generation_Increments_OnEachReturnToPool()
+        {
+            GameObject instance = _pool.Get();
+            var handle = instance.GetComponent<PooledInstance>();
+            uint first = handle.Generation;
+
+            _pool.Release(instance);
+            Assert.That(handle.Generation, Is.Not.EqualTo(first));
+        }
+
+        [Test]
+        public void PooledRef_GoesStale_WhenInstanceIsRecycled()
+        {
+            _prefab.AddComponent<BoxCollider>();
+            var pool = new GameObjectPool(_prefab, defaultCapacity: 2, maxSize: 4);
+            try
+            {
+                BoxCollider taken = pool.Get<BoxCollider>();
+                PooledRef<BoxCollider> reference = PooledRef.To(taken);
+                Assert.That(reference.IsAlive, Is.True);
+                Assert.That(reference.TryGet(out BoxCollider live), Is.True);
+                Assert.That(live, Is.SameAs(taken));
+
+                pool.Release(taken);
+
+                // The object is alive and non-null — a null check would pass —
+                // but it is no longer the caller's to touch.
+                Assert.That(taken != null, Is.True);
+                Assert.That(reference.IsAlive, Is.False);
+                Assert.That(reference.TryGet(out _), Is.False);
+
+                // And it stays stale once handed to the next owner.
+                BoxCollider reused = pool.Get<BoxCollider>();
+                Assert.That(reused, Is.SameAs(taken));
+                Assert.That(reference.IsAlive, Is.False);
+            }
+            finally
+            {
+                pool.Dispose();
+            }
+        }
+
+        [Test]
+        public void PooledRef_TreatsNonPooledComponent_AsAliveWhileNonNull()
+        {
+            // Call sites should not need to know whether their target is pooled.
+            var loose = new GameObject("NotPooled");
+            var collider = loose.AddComponent<BoxCollider>();
+            PooledRef<BoxCollider> reference = PooledRef.To(collider);
+
+            Assert.That(reference.IsAlive, Is.True);
+
+            Object.DestroyImmediate(loose);
+            Assert.That(reference.IsAlive, Is.False);
+        }
+
+        [Test]
+        public void PooledRef_ToNull_IsNotAlive()
+        {
+            Assert.That(PooledRef.To<BoxCollider>(null).IsAlive, Is.False);
+            Assert.That(default(PooledRef<BoxCollider>).IsAlive, Is.False);
         }
     }
 }

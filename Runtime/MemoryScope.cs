@@ -62,6 +62,7 @@ namespace MemoryToolkit
 
             var pool = new GameObjectPool(prefab, defaultCapacity, maxSize);
             _pools.Add(prefab, pool);
+            _owned.Add(pool); // one ordered list: teardown is strict reverse-registration
             return pool;
         }
 
@@ -130,7 +131,9 @@ namespace MemoryToolkit
         // Read-only views for the Memory Inspector window.
         internal IReadOnlyList<FrameAllocator> Allocators => _allocators;
         internal IReadOnlyList<UnityEngine.Object> PinnedAssets => _pinned;
-        internal int OwnedDisposableCount => _owned.Count;
+        // Pools live in _owned too (for LIFO teardown) but are reported separately
+        // by the inspector, so exclude them from the disposable count.
+        internal int OwnedDisposableCount => _owned.Count - _pools.Count;
 
         internal void CollectStats(List<MemoryManager.PoolStat> results)
         {
@@ -148,18 +151,25 @@ namespace MemoryToolkit
         }
 
         /// <summary>
-        /// Frees everything the scope owns: pooled instances are destroyed and
-        /// registered disposables are disposed in reverse registration order.
-        /// Safe to call more than once.
+        /// Frees everything the scope owns.
+        ///
+        /// <para><b>Order is guaranteed: strict reverse of registration (LIFO),
+        /// across pools, arenas, and registered disposables alike.</b> Teardown
+        /// is exactly setup run backwards, so a thing registered after its
+        /// dependencies is always torn down before them. This is what lets a
+        /// hand-ordered teardown method be replaced by a single
+        /// <c>Dispose</c> — register in dependency order and the ordering
+        /// carries over. Note that <see cref="GetPool"/> registers a pool on
+        /// first use, so a pool acquired lazily from gameplay code registers
+        /// later, and is therefore disposed earlier, than one warmed up front.</para>
+        ///
+        /// <para>A disposable that throws is logged and skipped; the rest of the
+        /// scope is still freed. Safe to call more than once.</para>
         /// </summary>
         public void Dispose()
         {
             if (IsDisposed) return;
             IsDisposed = true;
-
-            foreach (GameObjectPool pool in _pools.Values)
-                pool.Dispose();
-            _pools.Clear();
 
             for (int i = _owned.Count - 1; i >= 0; i--)
             {
@@ -174,6 +184,7 @@ namespace MemoryToolkit
                 }
             }
             _owned.Clear();
+            _pools.Clear();
             _allocators.Clear();
 
             // Drop pin references only; the next unused-assets sweep reclaims

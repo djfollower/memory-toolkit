@@ -58,6 +58,37 @@ label.SetText(StringBuilderCache.GetStringAndRelease(sb));
 
 Implement `IPoolable` on pooled components to reset per-use state (`OnTakenFromPool` / `OnReturnedToPool`).
 
+### Pooling component-typed code
+
+Game code holds components, not GameObjects. `Get<T>()` resolves the component once per instance and
+caches it, so the hot path never pays `GetComponent`:
+
+```csharp
+Projectile shot = pool.Get<Projectile>(muzzle.position, muzzle.rotation);
+pool.Release(shot); // component overload — no .gameObject at the call site
+```
+
+### Surviving reuse: `PooledRef<T>`
+
+Pooling breaks the rule that a non-null reference is still yours. An instance released and re-taken
+is alive, non-null, and someone else's — so a null check passes and you corrupt another system's
+object. Capture a `PooledRef` across any suspension point:
+
+```csharp
+PooledRef<Enemy> enemy = PooledRef.To(pool.Get<Enemy>());
+await LoadLoadoutAsync();
+if (enemy.TryGet(out Enemy e)) e.Equip(loadout); // false if it was recycled during the await
+```
+
+### Before you pool a prefab: validate it
+
+**Assets > Memory Toolkit > Validate Pool Safety** runs the static pre-flight checks — a
+ParticleSystem whose Stop Action is *Destroy* (it deletes its own GameObject and the pool then serves
+fake-null), an `OnDestroy` doing cleanup that silently stops running under pooling, rigidbodies with
+no `IPoolable` to reset physics state, missing scripts. These are the failures that look like
+anything except a pooling bug. A clean report means "nothing statically disqualifying", not "proven
+correct" — see the checklist in [`docs/ADOPTION.md`](docs/ADOPTION.md).
+
 ## Addressables
 
 With `com.unity.addressables` installed, the `MemoryToolkit.Addressables` assembly compiles automatically (version define, no hard dependency) and adds scope extensions. Addressables memory is reference-counted — a bundle stays resident until every handle is released — so handles follow the same rule as everything else: **a scope owns them**.
@@ -103,6 +134,13 @@ Read it like this: in steady state a pool's `total` must stop growing — if it 
 6. **Shrink on signal, not continuously.** Pools hold capacity until `Application.lowMemory`, then `Trim` to a floor and release unused assets.
 7. **Blocking GC only behind loading screens.** Enable *Incremental GC* in Player Settings; call `MemoryManager.CollectFull()` only during transitions.
 8. **Deterministic native memory.** `Allocator.Persistent` blocks are owned by disposable types and released in `Dispose`; nothing relies on finalizers.
+
+## Adopting this in an existing project
+
+[`docs/ADOPTION.md`](docs/ADOPTION.md) is the field guide: how to triage an unfamiliar codebase for
+lifetime boundaries, what order to land the toolkit in, and the pooling hazards that only show up in
+real projects (self-destructing FX prefabs, `AddComponent` spawn paths, event-subscription leaks,
+async continuations outliving their scope). Worked end to end on an existing production codebase.
 
 ## Samples
 
