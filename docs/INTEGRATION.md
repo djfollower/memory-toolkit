@@ -244,6 +244,16 @@ the return path's fallback is a free instrument: count it per session. Here it f
 path after every scene transition (failure A). A number — "the pool falls back to Destroy N times per
 session" — is what makes the migration fundable, and it costs one afternoon.
 
+Record it as a rate, not a total. `MemoryRecorder` (Inspector toolbar > **Record**, or
+`MemoryRecorder.Enable()` in a development build) samples `PoolBridge.UnknownInstanceCount` into the
+Timeline's **Escapes** strip, so the failure lands on a time axis next to the scene loads that cause
+it. This matters here specifically: failure A is a *transition* — the registry is wiped by a scene
+load, and every snapshot taken afterwards shows an empty, innocent-looking pool table. A session
+total tells you something is wrong; the strip tells you it happens at every load, which is the
+sentence that gets the work scheduled. `MemoryRecorder.Dump()` prints the same numbers into a device
+log when there is no window to look at, and `MemoryOverlay.Show()` puts them on screen on the
+hardware where it actually hurts.
+
 ### Step 2 — Own the registry's lifetime, keep its API
 
 The smallest change with the largest effect is decoupling the registry from the pool root's

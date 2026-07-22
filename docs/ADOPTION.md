@@ -257,4 +257,6 @@ Before pooling any prefab:
 - [ ] Tweens killed, coroutines stopped, physics state reset on return
 - [ ] Identity-keyed collections have exact add/remove pairing
 - [ ] Post-`await` code re-checks scope and instance validity
-- [ ] `maxSize` set from a measured peak, warm-up count sized from the Memory Inspector — not guesses
+- [ ] `maxSize` set from a measured peak, warm-up count sized from the Memory Inspector's Timeline
+      **peak active** over a representative session — not guesses, and not the instantaneous count
+      a snapshot shows, which is whatever happened to be live when you looked

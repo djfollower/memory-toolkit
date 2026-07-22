@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MemoryToolkit.Buffers;
+using MemoryToolkit.Diagnostics;
 using MemoryToolkit.Pooling;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -119,6 +120,7 @@ namespace MemoryToolkit
         /// </summary>
         public static AsyncOperation CollectFull()
         {
+            MemoryRecorder.RecordEvent(MemoryEventKind.CollectFull, "CollectFull");
             GC.Collect();
             return Resources.UnloadUnusedAssets();
         }
@@ -150,8 +152,17 @@ namespace MemoryToolkit
         /// <summary>Live scopes, oldest first. For the Memory Inspector window.</summary>
         internal static IReadOnlyList<MemoryScope> LiveScopes => Scopes;
 
+        /// <summary>
+        /// The frame arena if one exists, without creating it. Diagnostics must
+        /// observe rather than cause: reading <see cref="FrameScratch"/> allocates
+        /// the arena on first access, so a recorder sampling it would conjure a
+        /// megabyte of native memory into a game that never used the feature.
+        /// </summary>
+        internal static FrameAllocator FrameScratchOrNull => _frameScratch;
+
         internal static void OnLowMemory()
         {
+            MemoryRecorder.RecordEvent(MemoryEventKind.LowMemory, "Application.lowMemory");
             for (int i = 0; i < Scopes.Count; i++)
                 Scopes[i].Trim(LowMemoryKeepPerPool);
             Resources.UnloadUnusedAssets();
@@ -176,6 +187,7 @@ namespace MemoryToolkit
         private static MemoryScope AddScope(MemoryScope scope)
         {
             Scopes.Add(scope);
+            MemoryRecorder.RecordEvent(MemoryEventKind.ScopeCreated, scope.Name);
             scope.Disposed += () => Scopes.Remove(scope);
             EnsureRunner();
             return scope;
@@ -207,7 +219,13 @@ namespace MemoryToolkit
         // LateUpdate rather than Update: consumers of this frame's scratch have
         // run; the arena must survive until everything that allocated from it
         // this frame has finished.
-        private void LateUpdate() => MemoryManager.ResetFrameScratch();
+        private void LateUpdate()
+        {
+            // Sample before the reset, so the recorded arena usage is this frame's
+            // real high-water mark rather than the zero it is about to become.
+            MemoryRecorder.Tick();
+            MemoryManager.ResetFrameScratch();
+        }
 
         private void OnApplicationQuit()
         {

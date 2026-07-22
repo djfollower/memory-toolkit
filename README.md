@@ -148,6 +148,22 @@ var loginScope = MemoryManager.CreateSceneScope();                   // momentar
 
 Read it like this: in steady state a pool's `total` must stop growing — if it keeps climbing you are leaking instances (missing `Release`) or your warm-up count is too low; a scope that should be dead but still appears means something cached a reference across a load. Size warm-up counts and arena capacities from the peaks shown here, not guesses. Pair with the **Memory Profiler** package (already in this project) and the Profiler's *GC Alloc* column: gameplay frames should show **0 B** allocated.
 
+### Timeline: what a snapshot cannot show
+
+Press **Record** in the Inspector toolbar to start `MemoryRecorder`, and the Timeline pane fills in above the scope list.
+
+The reason it exists is that the failures worth catching are *transitions*, not states. A pool registry wiped by a scene load, a scope that outlived the load which should have killed it, a pool that quietly stopped pooling and went back to Instantiate/Destroy — each of these looks fine in the frame you are looking at. The snapshot afterwards is clean and empty. Only something already recording can show you the moment it went wrong.
+
+Three things to read there:
+
+- **Escapes** — instances that reached `PoolBridge.Return` owned by no toolkit pool, so they were destroyed rather than pooled. Non-zero means pooling is not working and is costing more than not pooling at all. This is the number to drive to zero, and it is the regression baseline to capture *before* a migration (see `docs/INTEGRATION.md` §7).
+- **Per-pool sparklines with a peak marker.** The peak is the warm-up count. The instantaneous active count a snapshot shows cannot size a pool; the high-water mark over a representative session can.
+- **Events** — scope created/disposed, pool created lazily, trim, low memory. A scope bar that does not end where the level ended is a leak.
+
+`MemoryRecorder` lives in the runtime assembly, so it also works in a player build. `MemoryOverlay.Show()` draws the same data on screen for a development build on device — which is where memory failures actually happen — and `MemoryRecorder.Dump()` writes a text report for device logs and CI. Both compile out entirely outside the editor and development builds, and a sampling tick allocates 0 B in steady state (asserted by a test).
+
+The Inspector window is UI Toolkit; the on-device overlay is `OnGUI` and stays that way. `Show()` is the entire integration — no `PanelSettings` asset, no canvas, nothing to add to a scene — which is worth more on a device build than nicer curves are.
+
 ## The rules this codebase follows
 
 1. **Group allocations by lifetime.** Everything belongs to a tier — Permanent, Scene, or Frame — and is released with its tier, never one-by-one at random times.

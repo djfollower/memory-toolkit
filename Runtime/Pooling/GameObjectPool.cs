@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MemoryToolkit.Diagnostics;
 using UnityEngine;
 using UnityEngine.Pool;
 
@@ -32,14 +33,39 @@ namespace MemoryToolkit.Pooling
         /// <summary>Instances currently held inside the pool.</summary>
         public int CountInactive => _pool.CountInactive;
 
-        /// <summary>Instances handed out and not yet released.</summary>
-        public int CountActive => _pool.CountActive;
+        /// <summary>
+        /// Instances handed out and not yet released.
+        ///
+        /// <para>Counted from the tracked active set, not derived as
+        /// <c>CountAll - CountInactive</c> the way <see cref="ObjectPool{T}"/>
+        /// does it. That subtraction is only correct while nothing resets
+        /// <c>CountAll</c> — and <c>Clear</c> zeroes it while instances are
+        /// still checked out, which <see cref="Trim"/> relies on internally.
+        /// Deriving here would report a negative active count after any
+        /// partial trim, and stay wrong for the rest of the session.</para>
+        /// </summary>
+        public int CountActive => _active.Count;
 
-        /// <summary>Total instances ever created by this pool and still alive.</summary>
-        public int CountAll => _pool.CountAll;
+        /// <summary>
+        /// Total instances ever created by this pool and still alive.
+        /// Summed from the two tracked halves for the same reason as
+        /// <see cref="CountActive"/>.
+        /// </summary>
+        public int CountAll => _active.Count + _pool.CountInactive;
 
         /// <summary>The prefab this pool instantiates.</summary>
         public GameObject Prefab => _prefab;
+
+        /// <summary>
+        /// The prefab's name, captured once at construction.
+        ///
+        /// <para><c>UnityEngine.Object.name</c> marshals a fresh managed string on
+        /// every call, so reading it per pool per sample — which any diagnostic
+        /// display does — allocates continuously. Caching it here keeps the
+        /// Inspector and recorder from generating the garbage they exist to report,
+        /// and keeps a readable label after the prefab itself is destroyed.</para>
+        /// </summary>
+        public string PrefabName { get; }
 
         /// <summary>
         /// True once <see cref="Warmup"/> has run. A pool that is false here was
@@ -71,10 +97,11 @@ namespace MemoryToolkit.Pooling
             if (prefab == null) throw new ArgumentNullException(nameof(prefab));
 
             _prefab = prefab;
+            PrefabName = prefab.name;
 
             if (inactiveRoot == null)
             {
-                var rootGo = new GameObject($"[Pool] {prefab.name}");
+                var rootGo = new GameObject($"[Pool] {PrefabName}");
                 rootGo.hideFlags = HideFlags.DontSave;
                 rootGo.SetActive(false); // keeps pooled children inactive without per-child SetActive costs on scene ops
                 if (Application.isPlaying)
@@ -106,6 +133,7 @@ namespace MemoryToolkit.Pooling
             ThrowIfDisposed();
             WasWarmedUp = true;
             if (_pool.CountInactive >= count) return;
+            MemoryRecorder.RecordEvent(MemoryEventKind.PoolWarmedUp, PrefabName, count);
 
             // Get-then-release keeps ObjectPool's active/inactive counters
             // consistent (releasing externally created instances would not).
@@ -232,6 +260,7 @@ namespace MemoryToolkit.Pooling
             ThrowIfDisposed();
             if (keep < 0) keep = 0;
             if (_pool.CountInactive <= keep) return;
+            MemoryRecorder.RecordEvent(MemoryEventKind.PoolTrimmed, PrefabName, _pool.CountInactive - keep);
 
             if (keep == 0)
             {

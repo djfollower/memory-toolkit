@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MemoryToolkit.Buffers;
+using MemoryToolkit.Diagnostics;
 using MemoryToolkit.Pooling;
 using UnityEngine;
 
@@ -61,6 +62,7 @@ namespace MemoryToolkit
             }
 
             var pool = new GameObjectPool(prefab, defaultCapacity, maxSize);
+            MemoryRecorder.RecordEvent(MemoryEventKind.PoolCreated, pool.PrefabName, defaultCapacity);
             _pools.Add(prefab, pool);
             _owned.Add(pool); // one ordered list: teardown is strict reverse-registration
             return pool;
@@ -164,7 +166,9 @@ namespace MemoryToolkit
                 results.Add(new MemoryManager.PoolStat
                 {
                     ScopeName = Name,
-                    PrefabName = kvp.Key != null ? kvp.Key.name : "(destroyed prefab)",
+                    // Cached on the pool: Object.name allocates a string per call,
+                    // and this runs per pool per sample.
+                    PrefabName = kvp.Value.PrefabName,
                     CountActive = kvp.Value.CountActive,
                     CountInactive = kvp.Value.CountInactive,
                     CountAll = kvp.Value.CountAll,
@@ -193,6 +197,7 @@ namespace MemoryToolkit
         {
             if (IsDisposed) return;
             IsDisposed = true;
+            MemoryRecorder.RecordEvent(MemoryEventKind.ScopeDisposed, Name, _pools.Count);
 
             for (int i = _owned.Count - 1; i >= 0; i--)
             {

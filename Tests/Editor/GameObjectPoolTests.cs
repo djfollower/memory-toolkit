@@ -87,6 +87,35 @@ namespace MemoryToolkit.Tests
             Assert.That(_pool.CountInactive, Is.EqualTo(0));
         }
 
+        // Trim's partial path clears the underlying ObjectPool and re-releases the
+        // instances it held back. ObjectPool.Clear() zeroes CountAll, so any count
+        // derived as CountAll - CountInactive goes negative here and stays wrong for
+        // the rest of the session — including in the Memory Inspector, whose own
+        // Trim button triggers it.
+        [Test]
+        public void Trim_KeepingSome_LeavesCountActiveAtZero()
+        {
+            _pool.Warmup(6);
+            _pool.Trim(2);
+
+            Assert.That(_pool.CountActive, Is.EqualTo(0));
+            Assert.That(_pool.CountInactive, Is.EqualTo(2));
+            Assert.That(_pool.CountAll, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Trim_WithInstancesCheckedOut_KeepsCountActiveCorrect()
+        {
+            _pool.Warmup(6);
+            _pool.Get();
+            _pool.Get();
+            _pool.Trim(2);
+
+            Assert.That(_pool.CountActive, Is.EqualTo(2));
+            Assert.That(_pool.CountInactive, Is.EqualTo(2));
+            Assert.That(_pool.CountAll, Is.EqualTo(4));
+        }
+
         [Test]
         public void Dispose_DestroysActiveInstances_NotJustPooledOnes()
         {

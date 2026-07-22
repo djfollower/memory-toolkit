@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.7.0] - 2026-07-22
+
+A snapshot cannot show a transition, and every memory failure this package exists to prevent is a
+transition: a registry wiped by a scene load, a scope that outlived the load which should have killed
+it, a pool that quietly stopped pooling. Each looks fine in the frame you are looking at, and the
+snapshot taken afterwards is clean and empty. This release adds the time axis.
+
+### Fixed
+- **`GameObjectPool.CountActive` could report a negative count, and stayed wrong for the rest of the
+  session.** It forwarded to `ObjectPool<T>`, which derives active as `CountAll - CountInactive`;
+  `Clear()` zeroes `CountAll` while instances are still checked out, and `Trim(keep > 0)` clears
+  internally as part of its partial-trim path. Trimming a pool that retained 2 instances reported
+  `CountActive == -2`. The Memory Inspector's own Trim button triggered it. Both counts are now
+  summed from the tracked active set rather than derived. If you were logging these numbers, they
+  change — the old ones were wrong.
+
+### Added
+- **`MemoryToolkit.Diagnostics.MemoryRecorder`**: a fixed-capacity recorder of pool and scope activity
+  over time. Two streams — sparse *events* (scope created/disposed, pool created lazily, warm-up,
+  trim, low memory, `CollectFull`) and dense periodic *samples* (per-pool active/inactive, managed
+  heap, live scope count, and per-interval deltas of the `PoolBridge` counters). Disabled by default;
+  every entry point is `[Conditional]` on `UNITY_EDITOR` / `DEVELOPMENT_BUILD`, so a release build
+  removes the calls and their arguments. A sampling tick allocates 0 B in steady state, asserted by a
+  test — a diagnostic that produces garbage changes what it is measuring.
+- **Timeline pane in the Memory Inspector**: escape-rate strip, managed-heap history, per-pool
+  sparklines with a peak marker, and a recent-events list, over a shared time axis. The peak is what
+  sizes a warm-up count; the instantaneous number the window showed before cannot. Gaps are drawn as
+  gaps — a pool that went away must not read as a pool sitting idle at zero.
+
+### Changed
+- **The Memory Inspector is now a UI Toolkit window** (was IMGUI). Charts are stroked, anti-aliased
+  polylines with a filled area, drawn via `Painter2D` in a retained element that regenerates geometry
+  only when new samples arrive — the IMGUI version issued one `DrawRect` per sample per repaint, and
+  repainted the entire window on every editor tick. Refresh is now scheduled at 4 Hz to match the
+  recorder's sample rate. No API change; the menu item is unchanged.
+- **`MemoryToolkit.Diagnostics.MemoryOverlay`**: the same data drawn on screen in a development build
+  via `OnGUI` — no canvas, no prefab, no uGUI dependency — because the memory failures that matter
+  happen on a low-end device, twenty minutes in, on a build nobody can attach a profiler to.
+  `MemoryRecorder.Dump()` produces the equivalent as text for device logs and CI.
+- **`GameObjectPool.PrefabName`**, cached at construction. `UnityEngine.Object.name` marshals a new
+  managed string on every call, so reading it per pool per repaint — which the Inspector already did —
+  allocated continuously. `MemoryScope.CollectStats` now uses the cached name, and the label survives
+  the prefab being destroyed.
+
 ## [0.6.0] - 2026-07-22
 
 Driven by a second production codebase (see `docs/INTEGRATION.md`) — this one already had a pool, so
