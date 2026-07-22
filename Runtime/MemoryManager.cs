@@ -138,6 +138,13 @@ namespace MemoryToolkit
             public int CountActive;
             public int CountInactive;
             public int CountAll;
+
+            /// <summary>
+            /// False when the pool was created lazily on a first <c>Get</c> rather
+            /// than by <c>Warmup</c> — meaning its capacity came from a call site's
+            /// guess and its first spawn cost an Instantiate during gameplay.
+            /// </summary>
+            public bool WasWarmedUp;
         }
 
         /// <summary>Live scopes, oldest first. For the Memory Inspector window.</summary>

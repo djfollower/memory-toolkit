@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.6.0] - 2026-07-22
+
+Driven by a second production codebase (see `docs/INTEGRATION.md`) — this one already had a pool, so
+every item here is about the case 0.5.0 could not handle: a project with an incumbent pooling system
+and hundreds of call sites that cannot be rewritten in one change.
+
+### Added
+- **`MemoryToolkit.Migration.PoolBridge`**: a backing implementation for a project's existing global
+  pool API. Brownfield projects reach their pool through a handful of extension methods called from
+  hundreds of places, so replacing the pool is not a landable change — the toolkit has to run
+  *underneath* the existing API. Re-point those methods at the bridge and every call site keeps
+  working on scope-owned pools. `ScopeResolver` makes the per-prefab ownership decision explicit
+  (the one the incumbent usually made by accident); `UnknownInstances` is the migration dial for the
+  period when two registries are live; `UnknownInstanceCount` / `LazyPoolCount` are the metrics that
+  say whether the migration is working.
+- **`GameObjectPool.WasWarmedUp`**, surfaced in the Memory Inspector as *(not warmed)*. A pool created
+  lazily by a first `Get` took its capacity from whichever call site happened to run first and paid an
+  Instantiate during gameplay to exist at all. Previously indistinguishable from a warmed pool.
+- **`MemoryScope.TryGetPool`**: answers "is this prefab already pooled, and by whom?" without creating
+  a pool as a side effect of asking.
+- **`PooledInstance.IsPooled`**: the O(1) "is this in the pool?" query, so an incumbent's equivalent
+  (typically a linear scan of the free list, often run on every return) can be re-pointed at it.
+- **`GameObjectPool.DoubleReleaseCount`**: repeat releases are harmless but a non-zero count means
+  call sites are unsure who owns the release.
+
+### Changed
+- **`GameObjectPool.Release` now throws on an instance from another pool**, naming both prefabs.
+  Releasing into the wrong pool is the characteristic failure of a migration running two registries
+  side by side; it previously failed obscurely inside the pool's internal accounting.
+- **Double release is now a documented O(1) guarantee** rather than an unstated behaviour. When the
+  contract is unwritten, every call site adds its own guard, those guards are usually a linear scan,
+  and they get applied inconsistently — one real codebase had 20 such hand-written guards, each
+  duplicating a check the pool already performed internally.
+- `PooledInstance.Release` delegates the already-pooled case to the pool instead of short-circuiting,
+  so one place owns the idempotency rule and repeat releases are counted wherever they originate.
+
+### Docs
+- `docs/INTEGRATION.md`: the brownfield companion to `ADOPTION.md` — how to read an incumbent pool for
+  its six usual failure modes, why the churn greps mislead in a project that already pools, and a
+  migration order that never runs two registries blind. Also records that all five hazards in
+  `ADOPTION.md` §4 reproduced independently in a second, unrelated codebase.
+
 ## [0.5.0] - 2026-07-22
 
 Driven by adopting the toolkit in an existing production codebase (see `docs/ADOPTION.md`). Every

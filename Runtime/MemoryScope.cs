@@ -66,6 +66,28 @@ namespace MemoryToolkit
             return pool;
         }
 
+        /// <summary>
+        /// Finds an existing pool for <paramref name="prefab"/> in this scope or
+        /// its parent chain, without creating one. Use this when "is this prefab
+        /// already pooled, and by whom?" is the actual question — creating a pool
+        /// as a side effect of asking is how pools end up sized by whichever call
+        /// site happened to run first.
+        /// </summary>
+        public bool TryGetPool(GameObject prefab, out GameObjectPool pool)
+        {
+            pool = null;
+            if (IsDisposed || prefab == null) return false;
+
+            for (MemoryScope scope = this; scope != null; scope = scope.Parent)
+            {
+                if (!scope.IsDisposed && scope._pools.TryGetValue(prefab, out pool))
+                    return true;
+            }
+
+            pool = null;
+            return false;
+        }
+
         /// <summary>Pre-instantiates instances for a prefab in this scope. Call during loads.</summary>
         public void Warmup(GameObject prefab, int count, int maxSize = 256)
             => GetPool(prefab, count, Mathf.Max(count, maxSize)).Warmup(count);
@@ -146,6 +168,7 @@ namespace MemoryToolkit
                     CountActive = kvp.Value.CountActive,
                     CountInactive = kvp.Value.CountInactive,
                     CountAll = kvp.Value.CountAll,
+                    WasWarmedUp = kvp.Value.WasWarmedUp,
                 });
             }
         }

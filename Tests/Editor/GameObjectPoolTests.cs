@@ -119,6 +119,61 @@ namespace MemoryToolkit.Tests
         }
 
         [Test]
+        public void Release_OfAnInstanceFromAnotherPool_ThrowsNamingBothPrefabs()
+        {
+            // The characteristic failure of a migration running two registries:
+            // silent unless someone checks, and it corrupts both pools' accounting.
+            var otherPrefab = new GameObject("OtherPrefab");
+            var otherPool = new GameObjectPool(otherPrefab, defaultCapacity: 2, maxSize: 4);
+            try
+            {
+                GameObject foreign = otherPool.Get();
+
+                var ex = Assert.Throws<InvalidOperationException>(() => _pool.Release(foreign));
+                Assert.That(ex.Message, Does.Contain("OtherPrefab").And.Contain("TestPrefab"));
+                Assert.That(otherPool.CountActive, Is.EqualTo(1), "the rejected release must not alter either pool");
+                Assert.That(_pool.CountInactive, Is.Zero);
+            }
+            finally
+            {
+                otherPool.Dispose();
+                Object.DestroyImmediate(otherPrefab);
+            }
+        }
+
+        [Test]
+        public void Release_OfAnInstanceNeverPooled_Throws()
+        {
+            var loose = new GameObject("Loose");
+            Assert.Throws<InvalidOperationException>(() => _pool.Release(loose));
+            Object.DestroyImmediate(loose);
+        }
+
+        [Test]
+        public void Release_IsO1DoubleReleaseSafe_AndCounted()
+        {
+            GameObject instance = _pool.Get();
+
+            _pool.Release(instance);
+            _pool.Release(instance);
+            _pool.Release(instance);
+
+            Assert.That(_pool.CountInactive, Is.EqualTo(1), "repeats must not push the instance again");
+            Assert.That(_pool.DoubleReleaseCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void WasWarmedUp_IsFalseForLazilyCreatedPools()
+        {
+            Assert.That(_pool.WasWarmedUp, Is.False);
+            _pool.Get();
+            Assert.That(_pool.WasWarmedUp, Is.False, "a Get must not count as declaring capacity");
+
+            _pool.Warmup(2);
+            Assert.That(_pool.WasWarmedUp, Is.True);
+        }
+
+        [Test]
         public void GetTyped_ReturnsComponent_AndServesRepeatCallsFromCache()
         {
             _prefab.AddComponent<BoxCollider>();

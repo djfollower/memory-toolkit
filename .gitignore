@@ -1,0 +1,6 @@
+# Un-anonymized source versions of the field guides. These retain client
+# project names, real file paths, and verbatim excerpts, and are never
+# published. The docs/*.md that ship are the anonymized versions.
+docs/.private/
+
+.DS_Store

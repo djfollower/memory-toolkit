@@ -28,6 +28,7 @@ scope.Register(new NativeParallelHashMap<int, int>(1024, Allocator.Persistent));
 | API | Replaces | Fragmentation source removed |
 |---|---|---|
 | `MemoryScope` (Permanent / Scene / Frame tiers) | ad-hoc lifetimes | Long-session accumulation; whole layers released at once |
+| `Migration.PoolBridge` | an existing global/static pool registry | Scene-owned registries that get wiped mid-session; stale asset-derived pool keys |
 | `MemoryManager.GetPool(prefab)` / `GameObjectPool` | `Instantiate` / `Destroy` | Prefab instance churn |
 | `MemoryManager.FrameScratch` (`FrameAllocator`) | per-frame `new T[]` / `Allocator.Temp` in hot loops | Transient buffer churn; arena is one contiguous block reset in O(1) each frame |
 | `StringBuilderCache` | string concatenation, `new StringBuilder()` | Per-frame string garbage |
@@ -79,6 +80,29 @@ PooledRef<Enemy> enemy = PooledRef.To(pool.Get<Enemy>());
 await LoadLoadoutAsync();
 if (enemy.TryGet(out Enemy e)) e.Equip(loadout); // false if it was recycled during the await
 ```
+
+### Already have a pool? Run the toolkit underneath it
+
+A project that already pools reaches its pool through a few extension methods called from hundreds of
+places, so "replace the pool" is not a landable change. `PoolBridge` is a backing implementation for
+that existing API — re-point the extension methods and every call site keeps working, now on
+scope-owned pools:
+
+```csharp
+using MemoryToolkit.Migration;
+
+// The project's own extension methods become one-line delegations:
+public static GameObject GetFromPool(this GameObject prefab) => PoolBridge.Get(prefab);
+public static void ReturnToPool(this GameObject instance)    => PoolBridge.Return(instance);
+
+// The decision the incumbent usually made by accident, now explicit:
+PoolBridge.ScopeResolver = prefab => BattlePrefabs.Contains(prefab) ? BattleScope : MemoryManager.Permanent;
+```
+
+The registry stops being owned by a scene object, an instance's owning pool travels on the instance
+rather than in a lookup table, and release is always reparented and O(1) double-release safe.
+`PoolBridge.UnknownInstanceCount` tracks instances arriving from a still-live second registry — the
+number to watch to zero during migration. See [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
 
 ### Before you pool a prefab: validate it
 
@@ -137,10 +161,19 @@ Read it like this: in steady state a pool's `total` must stop growing — if it 
 
 ## Adopting this in an existing project
 
-[`docs/ADOPTION.md`](docs/ADOPTION.md) is the field guide: how to triage an unfamiliar codebase for
-lifetime boundaries, what order to land the toolkit in, and the pooling hazards that only show up in
-real projects (self-destructing FX prefabs, `AddComponent` spawn paths, event-subscription leaks,
-async continuations outliving their scope). Worked end to end on an existing production codebase.
+[`docs/ADOPTION.md`](docs/ADOPTION.md) is the field guide for a project with **no pooling yet**: how to
+triage an unfamiliar codebase for lifetime boundaries, what order to land the toolkit in, and the
+pooling hazards that only show up in real projects (self-destructing FX prefabs, `AddComponent` spawn
+paths, event-subscription leaks, async continuations outliving their scope).
+
+[`docs/INTEGRATION.md`](docs/INTEGRATION.md) is the field guide for a project that **already pools**:
+how to read an incumbent pool for its six usual failure modes, why the churn greps mislead you there,
+and a migration order that never runs two registries blind. Its worked example is a shipped card game
+whose incumbent pool had roughly 640 call sites.
+
+Both are worked end to end on real production codebases, and each one's hazards were re-tested
+against the other's project. Project and file names in both guides are generalized — the findings are
+real, the code belongs to its owners.
 
 ## Samples
 

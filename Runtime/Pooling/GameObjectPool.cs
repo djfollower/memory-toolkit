@@ -38,6 +38,24 @@ namespace MemoryToolkit.Pooling
         /// <summary>Total instances ever created by this pool and still alive.</summary>
         public int CountAll => _pool.CountAll;
 
+        /// <summary>The prefab this pool instantiates.</summary>
+        public GameObject Prefab => _prefab;
+
+        /// <summary>
+        /// True once <see cref="Warmup"/> has run. A pool that is false here was
+        /// created lazily by whichever call site happened to spawn first, and its
+        /// capacity is that caller's guess rather than a measured peak — see the
+        /// Memory Inspector, which flags these.
+        /// </summary>
+        public bool WasWarmedUp { get; private set; }
+
+        /// <summary>
+        /// How many times an already-released instance was released again.
+        /// Harmless (the repeat is a no-op) but non-zero means call sites are
+        /// unsure who owns the release, which is worth resolving.
+        /// </summary>
+        public int DoubleReleaseCount { get; private set; }
+
         /// <param name="prefab">Prefab to instantiate.</param>
         /// <param name="defaultCapacity">Initial capacity of the internal stack.</param>
         /// <param name="maxSize">
@@ -86,6 +104,7 @@ namespace MemoryToolkit.Pooling
         public void Warmup(int count)
         {
             ThrowIfDisposed();
+            WasWarmedUp = true;
             if (_pool.CountInactive >= count) return;
 
             // Get-then-release keeps ObjectPool's active/inactive counters
@@ -152,11 +171,45 @@ namespace MemoryToolkit.Pooling
         public T Get<T>() where T : Component
             => Get<T>(_prefab.transform.position, _prefab.transform.rotation);
 
-        /// <summary>Deactivates the instance and returns it to the pool.</summary>
+        /// <summary>
+        /// Deactivates the instance and returns it to the pool.
+        ///
+        /// <para><b>Double release is safe and O(1)</b> — releasing an instance
+        /// that is already pooled is a no-op, counted in
+        /// <see cref="DoubleReleaseCount"/>. This is a documented guarantee
+        /// because the alternative is what happens in every hand-rolled pool:
+        /// call sites cannot tell whether the pool checks, so they each add their
+        /// own guard, those guards are usually a linear scan of the free list,
+        /// and they end up applied inconsistently across a large codebase.</para>
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// The instance did not come from this pool. Releasing into the wrong
+        /// pool is the characteristic failure of a migration that runs two pool
+        /// registries side by side, and it is silent unless someone checks — so
+        /// it fails loudly here rather than corrupting both pools' accounting.
+        /// </exception>
         public void Release(GameObject instance)
         {
             ThrowIfDisposed();
             if (instance == null) return;
+
+            if (!_handles.TryGetValue(instance, out PooledInstance handle))
+            {
+                var foreign = instance.GetComponent<PooledInstance>();
+                throw new InvalidOperationException(
+                    foreign != null && foreign.Owner != null
+                        ? $"Instance '{instance.name}' belongs to the pool for prefab " +
+                          $"'{NameOf(foreign.Owner._prefab)}', not '{NameOf(_prefab)}'. Release it to its own pool."
+                        : $"Instance '{instance.name}' was not created by the pool for '{NameOf(_prefab)}'. " +
+                          "Only instances obtained from this pool's Get() may be released to it.");
+            }
+
+            if (handle.IsInPool)
+            {
+                DoubleReleaseCount++;
+                return;
+            }
+
             _pool.Release(instance);
         }
 
@@ -277,6 +330,10 @@ namespace MemoryToolkit.Pooling
             if (instance != null)
                 DestroyObject(instance);
         }
+
+        // A pool whose prefab has since been destroyed must still be able to name
+        // itself in an error message — the error is often *about* that teardown.
+        private static string NameOf(GameObject prefab) => prefab != null ? prefab.name : "(destroyed prefab)";
 
         private static void DestroyObject(GameObject go)
         {

@@ -122,8 +122,14 @@ namespace MemoryToolkit.Editor
             {
                 EditorGUILayout.LabelField("Pools (active / pooled / total)", EditorStyles.miniBoldLabel);
                 foreach (MemoryManager.PoolStat stat in _poolStats)
-                    EditorGUILayout.LabelField(stat.PrefabName,
+                {
+                    // A pool with no Warmup was sized by whichever call site spawned
+                    // first and paid an Instantiate during gameplay to exist at all.
+                    // Marking it here is the only place that fact is visible.
+                    string label = stat.WasWarmedUp ? stat.PrefabName : stat.PrefabName + "  (not warmed)";
+                    EditorGUILayout.LabelField(label,
                         $"{stat.CountActive} / {stat.CountInactive} / {stat.CountAll}");
+                }
             }
 
             if (scope.Allocators.Count > 0)

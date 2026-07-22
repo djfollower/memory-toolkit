@@ -22,6 +22,15 @@ namespace MemoryToolkit.Pooling
         internal bool IsInPool { get; set; }
 
         /// <summary>
+        /// True while this instance is sitting in its pool rather than in use.
+        /// O(1) — it is a field on the instance, not a search of the free list.
+        /// Call sites should not need this (<see cref="Release"/> is already
+        /// double-release safe); it exists for diagnostics and for migration
+        /// shims that must answer an incumbent pool's equivalent query.
+        /// </summary>
+        public bool IsPooled => IsInPool;
+
+        /// <summary>
         /// Incremented every time this instance is returned to its pool. A
         /// reference captured during one use is stale once this changes — the
         /// object is alive and non-null, but it now belongs to someone else.
@@ -38,10 +47,16 @@ namespace MemoryToolkit.Pooling
         /// <summary>
         /// Returns this instance to the pool it came from.
         /// Safe to call multiple times; only the first call has an effect.
+        ///
+        /// <para>The already-pooled case is deliberately delegated to the pool
+        /// rather than short-circuited here, so that one place owns the
+        /// idempotency rule and repeat releases land in
+        /// <see cref="GameObjectPool.DoubleReleaseCount"/> wherever they come
+        /// from.</para>
         /// </summary>
         public void Release()
         {
-            if (IsInPool || Owner == null)
+            if (Owner == null)
                 return;
             Owner.Release(gameObject);
         }
