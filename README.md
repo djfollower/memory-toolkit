@@ -210,6 +210,27 @@ bridge to it. See [`docs/MCP.md`](docs/MCP.md).
 7. **Blocking GC only behind loading screens.** Enable *Incremental GC* in Player Settings; call `MemoryManager.CollectFull()` only during transitions.
 8. **Deterministic native memory.** `Allocator.Persistent` blocks are owned by disposable types and released in `Dispose`; nothing relies on finalizers.
 
+## Budgets, and the build farm
+
+Warm-up counts and arena sizes belong in an asset, not in an installer: a single warm-up number is
+wrong on two of any three targets, and the person who knows what a level should cost usually cannot
+edit an installer. **Create > Memory Toolkit > Memory Budget** holds them per scope, tiered Low /
+Medium / High, and `scope.ApplyTo(budget)` replaces the hand-written warm-up calls. The Inspector's
+**Apply measured peaks** writes a recorded session's peaks straight into it, which is the step that
+otherwise gets done once and never again. See [`docs/BUDGETS.md`](docs/BUDGETS.md) — including the
+one footgun: a direct prefab reference in a budget pins that prefab for the whole session.
+
+The same numbers give a build machine something to fail on:
+
+```bash
+Unity -batchmode -quit -executeMethod MemoryToolkit.Editor.CI.MemoryToolkitCI.Validate \
+      -mtk-budget Assets/Settings/MemoryBudget.asset -mtk-junit memory-report.xml
+```
+
+The static gate reads asset data only — no play mode, no graphics device — so it runs on every build
+from day one; the dynamic gate asserts escapes and heap ceilings over a play session the project
+supplies. See [`docs/CI.md`](docs/CI.md).
+
 ## Adopting this in an existing project
 
 [`docs/ADOPTION.md`](docs/ADOPTION.md) is the field guide for a project with **no pooling yet**: how to

@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.10.0] - 2026-07-23
+
+Every entry point in this package was a human in an Editor session — a menu item, a window, a Record
+button. A studio's workflow is a build farm, a QA matrix, and people who will not read a field guide.
+Nothing here produced or consumed an artifact, so it could not participate in any of that. This
+release adds the two artifacts: numbers a non-programmer can edit, and a gate a build machine can
+fail.
+
+### Added
+- **`MemoryBudget` asset** (Create > Memory Toolkit > Memory Budget) — warm-up counts, max sizes,
+  arena capacities and heap ceilings as data instead of literals in an installer, **tiered by device
+  class**. A single warm-up number is wrong on two of any three targets, which is the usual reason a
+  tool like this gets partially reverted. `scope.ApplyTo(budget)` replaces a hand-written installer;
+  `budget.ApplyGlobals()` sets the process-wide numbers.
+- **`TieredInt` and `DeviceTier`** — every number carries a Low/Medium/High value. Fill in `High`
+  only and it means one number everywhere; a zero resolves to the tier above, so a partially filled
+  row is always coherent. `DeviceTier.Current` is cached, because a tier that can change between two
+  pools in one scene produces a configuration nobody tested. Supply
+  `DeviceTier.Provider` to use a real device database; the built-in one reads `SystemInfo` and is
+  deliberately crude.
+- **Apply measured peaks** (budget inspector) — writes each recorded pool's peak active count into
+  the matching entry. Sizing a pool was always a measurement whose last step was a human copying a
+  number off a chart, which is where the loop broke: done once at adoption and never again. Recorded
+  pools with no entry are reported rather than added — which scope owns a pool is a decision, not a
+  measurement.
+- **Batch-mode gate**: `-executeMethod MemoryToolkit.Editor.CI.MemoryToolkitCI.Validate`, writing a
+  versioned JSON report and JUnit XML, exiting non-zero on findings. Two gates, separated on purpose:
+  the **static** one reads asset data only — no play mode, no graphics device, nothing the studio has
+  to build — so a team with no automated play sessions still gets value on day one. The **dynamic**
+  one (`WriteSessionReport`) asserts escapes and heap ceilings over a play session the project
+  supplies.
+- **`MemoryBudgetAudit`** — static coherence checks on a budget: a warm-up above its max size on any
+  tier (the pool would destroy what it just created, on the loading screen, silently), a direct
+  prefab reference in a non-Permanent scope, empty entries, duplicate scopes, entries that do
+  nothing, inverted tiers, and **a budgeted prefab that fails pool safety** — the check that connects
+  the budget to the thing it configures.
+- **[`docs/BUDGETS.md`](docs/BUDGETS.md)** and **[`docs/CI.md`](docs/CI.md)**, with working GitHub
+  Actions and Jenkins snippets.
+
+### Changed
+- **The project-wide prefab sweep moved out of the MCP `validate_project` handler** into
+  `PoolProjectScan`, shared by MCP and the CI gate. Three copies of a validator's entry point drift,
+  and the symptom is CI and the agent disagreeing about whether the project is clean. Tool output is
+  unchanged.
+
+### Notes
+- A budget holding **direct `GameObject` references pins those prefabs** and their meshes, materials
+  and textures for as long as the budget is loaded — a budget listing every level by direct reference
+  loads every level at boot. Direct references are for Permanent-tier content only; everything else
+  belongs behind an addressable key, which this asset holds as a string and cannot accidentally load.
+  The audit flags the mistake.
+- `ApplyTo` warms direct references and hands keyed entries back in `ApplyResult.PendingAddressables`
+  rather than growing an Addressables dependency in the runtime assembly to make an API look
+  complete.
+- Start the gate at `-mtk-fail-on never`. The first run on a real project finds a backlog, and
+  failing the build on day one gets the gate switched off permanently by someone with a release to
+  ship.
+- Exit codes are `0` clean, `1` findings, `2` the gate itself failed. `-quit` alone exits 0 no matter
+  what happens, so a crashed gate would otherwise be indistinguishable from a passing one.
+
 ## [0.9.0] - 2026-07-23
 
 Everything in this package could only measure pooling *after* someone had already done the work of

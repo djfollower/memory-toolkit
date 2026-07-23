@@ -259,58 +259,40 @@ namespace MemoryToolkit.Editor.Mcp
             int limit = Mathf.Clamp(arguments["limit"].AsInt(50), 1, 500);
             int maxPrefabs = Mathf.Clamp(arguments["maxPrefabs"].AsInt(500), 1, 5000);
 
-            // FindAssets logs its own error and returns nothing for a bad folder, which
-            // reads to an agent as "this folder is clean".
-            if (folder != "Assets" && !AssetDatabase.IsValidFolder(folder))
-                throw new InvalidOperationException($"'{folder}' is not a folder in this project.");
-
-            string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { folder });
-            int scanned = 0, withFindings = 0, errors = 0, warnings = 0;
+            // The sweep itself lives in PoolProjectScan, shared with the CI gate, so
+            // the two can never disagree about whether the project is clean. `limit`
+            // stays here: it caps how much of the result is *shown* to one caller,
+            // which is presentation, not scanning.
+            PoolProjectScan.Result scan = PoolProjectScan.Run(new PoolProjectScan.Options
+            {
+                Folder = folder,
+                MinSeverity = minSeverity,
+                MaxPrefabs = maxPrefabs,
+            });
 
             JsonValue reports = JsonValue.Array();
-            var issues = new List<PoolSafetyValidator.Issue>();
-
-            foreach (string guid in guids)
+            foreach (PoolProjectScan.PrefabReport report in scan.Reports)
             {
-                if (scanned >= maxPrefabs) break;
-
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (prefab == null) continue;
-
-                scanned++;
-                issues.Clear();
-                PoolSafetyValidator.Validate(prefab, issues);
-
-                int prefabErrors = CountAtLeast(issues, PoolSafetyValidator.Severity.Error);
-                int prefabWarnings = CountExactly(issues, PoolSafetyValidator.Severity.Warning);
-                errors += prefabErrors;
-                warnings += prefabWarnings;
-
-                JsonValue filtered = IssuesToJson(issues, minSeverity);
-                if (filtered.Count == 0) continue;
-
-                withFindings++;
-                if (reports.Count >= limit) continue;
+                if (reports.Count >= limit) break;
 
                 reports.Add(JsonValue.Object()
-                    .Set("assetPath", path)
-                    .Set("prefab", prefab.name)
-                    .Set("errors", prefabErrors)
-                    .Set("warnings", prefabWarnings)
-                    .Set("issues", filtered));
+                    .Set("assetPath", report.AssetPath)
+                    .Set("prefab", report.PrefabName)
+                    .Set("errors", report.Errors)
+                    .Set("warnings", report.Warnings)
+                    .Set("issues", IssuesToJson(report.Issues, minSeverity)));
             }
 
             return JsonValue.Object()
-                .Set("folder", folder)
+                .Set("folder", scan.Folder)
                 .Set("minSeverity", minSeverity.ToString())
-                .Set("prefabsFound", guids.Length)
-                .Set("prefabsScanned", scanned)
-                .Set("prefabsWithFindings", withFindings)
+                .Set("prefabsFound", scan.PrefabsFound)
+                .Set("prefabsScanned", scan.PrefabsScanned)
+                .Set("prefabsWithFindings", scan.PrefabsWithFindings)
                 .Set("reported", reports.Count)
-                .Set("truncated", withFindings > reports.Count || guids.Length > scanned)
-                .Set("totalErrors", errors)
-                .Set("totalWarnings", warnings)
+                .Set("truncated", scan.PrefabsWithFindings > reports.Count || scan.HitPrefabCap)
+                .Set("totalErrors", scan.TotalErrors)
+                .Set("totalWarnings", scan.TotalWarnings)
                 .Set("reports", reports);
         }
 
