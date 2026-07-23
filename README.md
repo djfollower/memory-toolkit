@@ -210,6 +210,23 @@ bridge to it. See [`docs/MCP.md`](docs/MCP.md).
 7. **Blocking GC only behind loading screens.** Enable *Incremental GC* in Player Settings; call `MemoryManager.CollectFull()` only during transitions.
 8. **Deterministic native memory.** `Allocator.Persistent` blocks are owned by disposable types and released in `Dispose`; nothing relies on finalizers.
 
+## Already have a lifetime system? Use it
+
+Most studios already express lifetime through a DI container. Adopting `MemoryScope` *as well* means
+two ownership systems that can disagree — so the scope becomes a dependent of the container's
+lifetime rather than a peer of it:
+
+```csharp
+builder.RegisterMemoryScope("Level");   // VContainer
+Container.BindMemoryScope("Level");     // Zenject
+```
+
+Both are optional assemblies with no hard dependency (same version-define pattern as Addressables).
+For projects without a container, `AttachTo(gameObject)`, `AttachTo(scene)` and
+`DisposeWhen(subscribe, unsubscribe)` bind disposal to whatever actually ends the lifetime — an
+Addressables scene load, a flow manager's event, a match that ends without a scene change. See
+[`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md).
+
 ## Budgets, and the build farm
 
 Warm-up counts and arena sizes belong in an asset, not in an installer: a single warm-up number is

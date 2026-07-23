@@ -1,0 +1,25 @@
+{
+    "name": "MemoryToolkit.VContainer",
+    "rootNamespace": "MemoryToolkit.Integrations",
+    "references": [
+        "MemoryToolkit.Runtime",
+        "VContainer"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "MEMORYTOOLKIT_VCONTAINER"
+    ],
+    "versionDefines": [
+        {
+            "name": "jp.hadashikick.vcontainer",
+            "expression": "1.13",
+            "define": "MEMORYTOOLKIT_VCONTAINER"
+        }
+    ],
+    "noEngineReferences": false
+}

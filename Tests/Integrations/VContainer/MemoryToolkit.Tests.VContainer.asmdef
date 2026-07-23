@@ -1,0 +1,33 @@
+{
+    "name": "MemoryToolkit.Tests.VContainer",
+    "rootNamespace": "MemoryToolkit.Tests",
+    "references": [
+        "MemoryToolkit.Runtime",
+        "MemoryToolkit.VContainer",
+        "VContainer",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "MEMORYTOOLKIT_VCONTAINER"
+    ],
+    "versionDefines": [
+        {
+            "name": "jp.hadashikick.vcontainer",
+            "expression": "1.13",
+            "define": "MEMORYTOOLKIT_VCONTAINER"
+        }
+    ],
+    "noEngineReferences": false
+}

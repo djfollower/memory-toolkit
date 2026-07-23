@@ -144,6 +144,34 @@ namespace MemoryToolkit
             return disposable;
         }
 
+        /// <summary>
+        /// Runs <paramref name="callback"/> when this scope is disposed — or
+        /// immediately, if it already has.
+        ///
+        /// <para>The immediate case is deliberate. Integration code subscribes to
+        /// teardown from outside (a container adapter, a scene hook), and "the thing
+        /// I am wiring up already ended" is a normal race, not an error. Silently
+        /// never firing would leave the subscriber waiting forever for an event that
+        /// has been and gone, which is exactly the leak this method is used to
+        /// prevent.</para>
+        ///
+        /// <para>Prefer <see cref="Register{T}"/> for anything the scope should own;
+        /// this is for notification, not ownership, and it does not participate in
+        /// the LIFO teardown order.</para>
+        /// </summary>
+        public void OnDisposed(Action callback)
+        {
+            if (callback == null) throw new ArgumentNullException(nameof(callback));
+
+            if (IsDisposed)
+            {
+                callback();
+                return;
+            }
+
+            Disposed += callback;
+        }
+
         /// <summary>Trims every pool owned by this scope. See <see cref="GameObjectPool.Trim"/>.</summary>
         public void Trim(int keepPerPool)
         {

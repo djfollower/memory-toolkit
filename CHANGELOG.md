@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.11.0] - 2026-07-23
+
+`CreateSceneScope()` assumed scenes are how a project ends things, and that a scope can be created
+after the scene is known. Neither holds for an Addressables scene load, a bespoke flow manager, an
+additive UI stack, or a match that ends without a scene change — and a lifetime this package cannot
+express is one somebody hand-rolls beside it. Two systems that disagree about ownership leak worse
+than one that never existed.
+
+### Added
+- **`MemoryToolkit.VContainer`** — `builder.RegisterMemoryScope("Level")`. The scope is registered
+  for injection and disposed by the container. Both halves matter: VContainer's `RegisterInstance`
+  does **not** transfer ownership, so registering a scope and assuming it gets torn down leaks all of
+  it silently.
+- **`MemoryToolkit.Zenject`** — `Container.BindMemoryScope("Level")`. Makes two bindings, one for
+  injection and one for the disposal pipeline; binding only the first resolves perfectly and leaks
+  the scope, so the adapter does both rather than leaving it to the caller to remember.
+- **`scope.AttachTo(GameObject)`** — dies with the object. Attaching a second scope to the same host
+  throws rather than overwriting, because a silent overwrite drops the first scope's disposal with no
+  symptom at the call site.
+- **`scope.AttachTo(Scene)`** — for when the scope exists before the scene does, which is the normal
+  order with Addressables scene loads.
+- **`scope.DisposeWhen(subscribe, unsubscribe)`** — bind disposal to an event the project already
+  has. Unsubscribes on disposal either way round, so a scope disposed early does not stay alive on an
+  event that outlives it.
+- **`scope.OnDisposed(Action)`** — teardown notification. Runs immediately if the scope has already
+  been disposed: integration code subscribes from outside, so "it already ended" is a race rather
+  than an error, and never firing would leave the subscriber waiting on an event that has been and
+  gone.
+- **[`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)**.
+
+### Notes
+- Both adapters are optional assemblies with **no hard dependency**, using the same version-define
+  pattern as the Addressables assembly. Install the container and the adapter compiles; don't and it
+  does not exist.
+- Contrary to what the roadmap assumed, these **are** covered by the test suite:
+  `Tests/Integrations/` holds a test assembly per container, gated on the same define, verified
+  against VContainer 1.16.5 and Extenject 9.2.0. The case each one asserts is the one that leaks
+  silently — that disposing the container really does dispose the scope and its pools.
+- `MemoryScopeAnchor` is `[ExecuteAlways]`. Without it, MonoBehaviour messages do not run outside
+  play mode, so an anchor attached from an editor tool would never fire.
+
 ## [0.10.0] - 2026-07-23
 
 Every entry point in this package was a human in an Editor session — a menu item, a window, a Record

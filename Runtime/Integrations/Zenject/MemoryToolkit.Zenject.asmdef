@@ -1,0 +1,26 @@
+{
+    "name": "MemoryToolkit.Zenject",
+    "rootNamespace": "MemoryToolkit.Integrations",
+    "references": [
+        "MemoryToolkit.Runtime",
+        "Zenject",
+        "Zenject-usage"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "MEMORYTOOLKIT_ZENJECT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.svermeulen.extenject",
+            "expression": "9.0",
+            "define": "MEMORYTOOLKIT_ZENJECT"
+        }
+    ],
+    "noEngineReferences": false
+}

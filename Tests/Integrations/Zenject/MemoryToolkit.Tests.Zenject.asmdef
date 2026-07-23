@@ -1,0 +1,34 @@
+{
+    "name": "MemoryToolkit.Tests.Zenject",
+    "rootNamespace": "MemoryToolkit.Tests",
+    "references": [
+        "MemoryToolkit.Runtime",
+        "MemoryToolkit.Zenject",
+        "Zenject",
+        "Zenject-usage",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "MEMORYTOOLKIT_ZENJECT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.svermeulen.extenject",
+            "expression": "9.0",
+            "define": "MEMORYTOOLKIT_ZENJECT"
+        }
+    ],
+    "noEngineReferences": false
+}

@@ -19,7 +19,7 @@ can read or write.**
 |---|---|---|---|
 | 0 | 0.9.0 ✅ | **A** — Shadow mode | No dependencies, smallest, and it is what gets the rest funded. Produces the number that justifies a migration sprint before anyone changes a call site. |
 | 1 | 0.10.0 ✅ | **B** — Budgets as data → **C** — Headless gate | B defines the schema C asserts against. Build as one unit; separately they cost more. |
-| 2 | 0.11.0 | **D** — DI / lifecycle adapters | Decides whether adoption is a one-line installer change or an architecture argument. Needs nothing from 0–1, but is worth less before budgets exist (the installer line is `ApplyBudget`). |
+| 2 | 0.11.0 ✅ | **D** — DI / lifecycle adapters | Decides whether adoption is a one-line installer change or an architecture argument. Needs nothing from 0–1, but is worth less before budgets exist (the installer line is `ApplyBudget`). |
 | 3 | 0.12.0 | **E** — Roslyn analyzer | Independent but expensive, and the one most likely to be switched off if rushed. Wants the reference projects free for false-positive measurement. |
 | 4 | 0.13.0 | **F** — Device, soak, field telemetry | Reuses C's JSON reader and B's ceilings. Real memory bugs are field bugs, so this is where the toolkit stops being an Editor tool. |
 | 5 | 1.0.0 | **G** — Agent triage over MCP | Last deliberately: it should encode the *stabilized* budget + validator surfaces, not chase them. |
@@ -160,8 +160,11 @@ the disagreement will be blamed on this package.
 - Compile matrix project per container.
 
 **Risks**
-- CI cannot verify these without the third-party packages installed. Be explicit that verification is
-  a separate compile-matrix project, and do not pretend the main test suite covers it.
+- ~~CI cannot verify these without the third-party packages installed.~~ **Resolved during
+  implementation:** the packages install into a throwaway project, so `Tests/Integrations/` holds a
+  test assembly per container gated on the same version define. It compiles away for projects with
+  neither, and the suite verifies against VContainer 1.16.5 and Extenject 9.2.0 for real. No
+  compile-matrix project needed.
 
 **Size:** M (1 week, plus per-container samples)
 
