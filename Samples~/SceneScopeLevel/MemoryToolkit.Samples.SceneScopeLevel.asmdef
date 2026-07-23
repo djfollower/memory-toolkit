@@ -1,0 +1,16 @@
+{
+    "name": "MemoryToolkit.Samples.SceneScopeLevel",
+    "rootNamespace": "MemoryToolkit.Samples.SceneScopeLevel",
+    "references": [
+        "MemoryToolkit.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

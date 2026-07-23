@@ -4,3 +4,10 @@
 docs/.private/
 
 .DS_Store
+
+# Unity marks a folder as "not an asset" with a trailing tilde, which collides with
+# the common global ignore rule for editor backup files (*~) — that rule was silently
+# keeping Samples~ (declared in package.json) and Tools~ out of the repository. These
+# are shipped content; re-include them.
+!Samples~/
+!Tools~/

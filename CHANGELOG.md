@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.8.0] - 2026-07-23
+
+Adopting pooling is a loop — *is this prefab safe to pool, is it pooled now, how big should the pool
+be, is anything still escaping* — and until now an agent working in a project could not close it. It
+could read the source and guess. Every one of those questions is answered by data that exists only
+inside a running Editor, so this release puts the tools there and speaks MCP.
+
+### Added
+- **MCP server in the Editor** (`Editor/Mcp/`, `Window > Analysis > Memory Toolkit MCP`). Eleven
+  tools: `editor_status`, `validate_prefab`, `validate_project`, `get_pool_stats`,
+  `get_memory_snapshot`, `recorder_control`, `get_recorder_timeline`, and — behind a separate opt-in —
+  `warmup_pool`, `trim_pools`, `dispose_scope`, `collect_full`. `get_recorder_timeline` returns
+  `peakActive` per pool as `suggestedWarmupCount` and derives findings (pools created lazily during
+  gameplay, instances escaping the pool) rather than leaving a model to infer them from raw samples.
+  Off by default; loopback-only, with a per-session token, and the mutating tools need a second
+  opt-in. Requests are queued onto the main thread and time out with an explanatory error rather than
+  hanging a tool call while the Editor compiles.
+- **`Tools~/memory-toolkit-mcp`**: dependency-free Node stdio bridge (Node 18+). The tool list is
+  fetched from Unity rather than duplicated, so a tool cannot drift from its description; when the
+  Editor is closed the bridge serves its cached list and announces `tools/list_changed` once it
+  returns, because a client reads the tool list once, at connect.
+- **[`docs/MCP.md`](docs/MCP.md)**: setup, tool reference, the adoption loop the tools are shaped for,
+  and the trust boundary.
+
 ## [0.7.0] - 2026-07-22
 
 A snapshot cannot show a transition, and every memory failure this package exists to prevent is a

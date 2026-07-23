@@ -164,6 +164,19 @@ Three things to read there:
 
 The Inspector window is UI Toolkit; the on-device overlay is `OnGUI` and stays that way. `Show()` is the entire integration — no `PanelSettings` asset, no canvas, nothing to add to a scene — which is worth more on a device build than nicer curves are.
 
+### Agent access (MCP)
+
+**Window > Analysis > Memory Toolkit MCP > Enable Server** exposes the same capabilities to a coding
+agent over MCP: `validate_prefab` / `validate_project`, live pool and heap state, recorder control and
+the timeline (with `peakActive` per pool — the warm-up count — and derived findings), and, behind a
+second opt-in, the mutating actions the Inspector's buttons perform (`warmup_pool`, `trim_pools`,
+`dispose_scope`, `collect_full`).
+
+The server runs *inside* the Editor because that is the only place the answers exist: the validator
+reflects over compiled component types and reads deserialized prefab data, and the pool stats and
+timeline are live process state. `Tools~/memory-toolkit-mcp/index.mjs` is a dependency-free stdio
+bridge to it. See [`docs/MCP.md`](docs/MCP.md).
+
 ## The rules this codebase follows
 
 1. **Group allocations by lifetime.** Everything belongs to a tier — Permanent, Scene, or Frame — and is released with its tier, never one-by-one at random times.

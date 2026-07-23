@@ -1,0 +1,16 @@
+{
+    "name": "MemoryToolkit.Samples.FrameScratchQuery",
+    "rootNamespace": "MemoryToolkit.Samples.FrameScratchQuery",
+    "references": [
+        "MemoryToolkit.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

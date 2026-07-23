@@ -1,0 +1,16 @@
+{
+    "name": "MemoryToolkit.Samples.MatchScope",
+    "rootNamespace": "MemoryToolkit.Samples.MatchScope",
+    "references": [
+        "MemoryToolkit.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
