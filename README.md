@@ -99,6 +99,28 @@ public static void ReturnToPool(this GameObject instance)    => PoolBridge.Retur
 PoolBridge.ScopeResolver = prefab => BattlePrefabs.Contains(prefab) ? BattleScope : MemoryManager.Permanent;
 ```
 
+### Before you migrate anything: measure what pooling would save
+
+Pooling is a sprint, and a sprint needs a number. Every other tool here can only produce that number
+*after* the migration it is meant to justify — pool stats require pools. Shadow mode inverts that:
+
+```csharp
+PoolBridge.Mode = PoolBridgeMode.Observe;   // instantiates and destroys exactly as before
+// ... play a real session ...
+Debug.Log(PoolShadow.Report());
+```
+
+Nothing is pooled, nothing is recycled, behaviour is unchanged — so this is safe to land and ship to
+a playtest on its own. What comes back is per prefab: the `Instantiate` and `Destroy` calls a pool
+would have absorbed, and the **peak concurrent live count**, which is the warm-up size. Shadow rows
+appear in the Inspector's Timeline like pools, so the peak marker there *is* the number to warm up
+to. `ReportJson()` gives the same thing for CI artifacts.
+
+This also makes the bridge worth using in a project with **no** pool at all: route
+`Instantiate`/`Destroy` pairs through it in Observe mode, measure, and only then decide what to pool.
+Observe mode is refused outside the editor and development builds — it costs an `AddComponent` per
+instance to attribute returns, and a memory tool must not ship a regression.
+
 The registry stops being owned by a scene object, an instance's owning pool travels on the instance
 rather than in a lookup table, and release is always reparented and O(1) double-release safe.
 `PoolBridge.UnknownInstanceCount` tracks instances arriving from a still-live second registry — the

@@ -318,6 +318,11 @@ namespace MemoryToolkit.Editor
             MemoryEventKind.ScopeDisposed => new Color(1f, 0.75f, 0.4f),
             MemoryEventKind.LowMemory => new Color(1f, 0.45f, 0.4f),
             MemoryEventKind.PoolCreated => new Color(0.75f, 0.75f, 0.75f),
+
+            // Distinct on purpose: everything after this marker is a session in which
+            // nothing was pooled, so a reader must not mistake shadow rows for pools.
+            MemoryEventKind.ShadowModeEnabled => new Color(0.45f, 0.8f, 1f),
+            MemoryEventKind.ShadowModeDisabled => new Color(0.45f, 0.8f, 1f),
             _ => new Color(0.6f, 0.6f, 0.6f),
         };
 

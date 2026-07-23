@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.9.0] - 2026-07-23
+
+Everything in this package could only measure pooling *after* someone had already done the work of
+adopting it — pool stats require pools. But adopting pooling in a real project is a sprint, and a
+sprint has to be argued for with a number nobody could produce yet. This release closes that gap
+from the other side: measure what pooling would save, while pooling nothing.
+
+### Added
+- **`PoolBridge.Mode = PoolBridgeMode.Observe`** — shadow mode. The bridge instantiates and destroys
+  exactly as the un-pooled code did; no pool is created and nothing is recycled, so the change is
+  safe to land and ship to a playtest on its own. Meanwhile `PoolShadow` counts, per prefab, the
+  instantiates and destroys a pool would have absorbed and the **peak concurrent live count** — the
+  warm-up size, and the one number a pre-migration codebase cannot otherwise produce.
+- **`PoolShadow.Report()` / `ReportJson()`** — the projection as text for device logs and tickets, or
+  as versioned JSON for CI artifacts and for seeding warm-up counts. `MemoryRecorder.Dump()` folds
+  the report in, because on device the log is the only channel a shadow run has.
+- **Shadow rows in the Timeline.** `PoolShadow` reports its prefabs in the same shape as pool stats,
+  so the Inspector's per-pool sparkline and peak marker draw them with no special case. On a shadow
+  row the peak marker *is* the warm-up count.
+- **`MemoryEventKind.ShadowModeEnabled` / `ShadowModeDisabled`**, drawn in a distinct colour: a
+  reader must not mistake a stretch of timeline where nothing was pooled for one where it was.
+
+### Notes
+- Observe mode is **refused outside the editor and development builds** — it costs an `AddComponent`
+  per instance to attribute returns, so shipping it on would be a regression caused by a memory tool.
+  The setter logs an error and stays in `Active` rather than trusting a build configuration.
+- It also makes `PoolBridge` useful to greenfield projects, which previously had no reason to touch
+  it: route `Instantiate`/`Destroy` pairs through the bridge in Observe mode, measure a real session,
+  and only then decide what to pool. The bridge is now the general adoption seam, not a
+  brownfield-only shim.
+- Switching modes mid-session is safe: an instance a pool still owns is released to its pool rather
+  than destroyed under it.
+- Double returns and returns of instances created outside the bridge are counted and called out in
+  the report — the first is a defect to fix before pooling, where it corrupts a free list; the second
+  means the projection is a floor rather than a total.
+
 ## [0.8.0] - 2026-07-23
 
 Adopting pooling is a loop — *is this prefab safe to pool, is it pooled now, how big should the pool

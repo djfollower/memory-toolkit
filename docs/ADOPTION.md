@@ -111,6 +111,15 @@ Route both through a pool owned by the scene scope, warmed during the level load
 then widen. Piece-destroy FX (an instantiate plus a timed `Destroy`) and merge FX are the natural
 second and third.
 
+**Picking that one prefab is a measurement, not a guess.** Grep 3 counts call sites, which is a proxy
+for churn and a bad one — one `Instantiate` inside the merge loop outweighs thirty in setup code.
+Before committing to a prefab, route the clone and destroy paths through `PoolBridge` with
+`Mode = PoolBridgeMode.Observe`. It instantiates and destroys exactly as the code above already does,
+so it is safe to ship, and a real session comes back with per-prefab counts and the **peak concurrent
+live count** — which is the warm-up number Step 2 needs and the only one a project with no pool
+cannot otherwise obtain. The same run sizes every later prefab, so it is worth doing once, wide,
+rather than per candidate.
+
 ### Step 3 — Per-frame allocations
 
 Only after pooling is stable. These are small but they are the difference between "low GC" and

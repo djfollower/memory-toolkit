@@ -1,9 +1,26 @@
 using System;
+using MemoryToolkit.Diagnostics;
 using MemoryToolkit.Pooling;
 using UnityEngine;
 
 namespace MemoryToolkit.Migration
 {
+    /// <summary>Whether the bridge pools, or only measures what pooling would save.</summary>
+    public enum PoolBridgeMode
+    {
+        /// <summary>Serve from scope-owned pools. The shipping mode.</summary>
+        Active,
+
+        /// <summary>
+        /// Instantiate and destroy exactly as the un-pooled code did, while
+        /// <see cref="PoolShadow"/> counts what a pool would have absorbed. Behaviour
+        /// is unchanged; nothing is recycled. Use it to size pools and to justify the
+        /// migration before writing any of it. Refused outside the editor and
+        /// development builds.
+        /// </summary>
+        Observe,
+    }
+
     /// <summary>What to do when an instance arrives that this bridge does not own.</summary>
     public enum UnknownInstancePolicy
     {
@@ -84,6 +101,65 @@ namespace MemoryToolkit.Migration
         public static Func<GameObject, MemoryScope> ScopeResolver { get; set; }
 
         /// <summary>
+        /// Whether the bridge pools (<see cref="PoolBridgeMode.Active"/>, the default)
+        /// or only measures (<see cref="PoolBridgeMode.Observe"/>).
+        ///
+        /// <para>Observe mode is the first step of a migration, before any call site
+        /// changes: re-point the project's existing extension methods at this bridge,
+        /// set this to <see cref="PoolBridgeMode.Observe"/>, ship it to a playtest, and
+        /// read <see cref="PoolShadow.Report"/>. Behaviour is identical to not having
+        /// adopted anything, so the change is safe to land on its own — and it comes
+        /// back with the per-prefab warm-up counts and the size of the prize.</para>
+        ///
+        /// <para><b>Refused outside the editor and development builds.</b> Observe mode
+        /// deliberately costs more than not using it — a component is added per
+        /// instance to attribute returns — so shipping it on would be a regression
+        /// caused by a memory tool. The setter logs an error and stays
+        /// <see cref="PoolBridgeMode.Active"/> there rather than trusting a build
+        /// configuration to be right.</para>
+        /// </summary>
+        public static PoolBridgeMode Mode
+        {
+            get => _mode;
+            set
+            {
+                if (_mode == value) return;
+
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+                if (value == PoolBridgeMode.Observe)
+                {
+                    Debug.LogError(
+                        "[MemoryToolkit] PoolBridge.Mode = Observe was refused: shadow mode measures pooling " +
+                        "instead of doing it, and costs an AddComponent per instance. Staying in Active mode.");
+                    return;
+                }
+#endif
+
+                _mode = value;
+                if (value == PoolBridgeMode.Observe)
+                {
+                    PoolShadow.Begin();
+                    MemoryRecorder.RecordEvent(MemoryEventKind.ShadowModeEnabled, "PoolBridge");
+
+                    // Loud on purpose. A shadow run left on is a game that pools
+                    // nothing, and the symptom — "the toolkit made it worse" — points
+                    // away from the cause.
+                    Debug.LogWarning(
+                        "[MemoryToolkit] PoolBridge is in Observe mode: nothing is being pooled. " +
+                        "Instances are instantiated and destroyed as before while PoolShadow measures what " +
+                        "pooling would save. Call PoolShadow.Report() at the end of the session.");
+                }
+                else
+                {
+                    MemoryRecorder.RecordEvent(MemoryEventKind.ShadowModeDisabled, "PoolBridge");
+                    Debug.Log("[MemoryToolkit] PoolBridge left Observe mode; pooling is active again.");
+                }
+            }
+        }
+
+        private static PoolBridgeMode _mode = PoolBridgeMode.Active;
+
+        /// <summary>
         /// How <see cref="Return"/> treats an instance this bridge does not own.
         /// Start at <see cref="UnknownInstancePolicy.LogAndDestroy"/> (day-one
         /// behaviour parity), move to <see cref="UnknownInstancePolicy.Ignore"/>
@@ -124,12 +200,27 @@ namespace MemoryToolkit.Migration
         public static void Warmup(GameObject prefab, int count, int maxSize = 0)
         {
             if (prefab == null) throw new ArgumentNullException(nameof(prefab));
+
+            // No-op rather than an error in Observe mode: warm-up calls are exactly
+            // what a migration adds, and they must be able to land in the same commit
+            // as the measurement that will size them.
+            if (_mode == PoolBridgeMode.Observe) return;
+
             ResolveScope(prefab).Warmup(prefab, count, maxSize > 0 ? maxSize : Mathf.Max(count, DefaultMaxSize));
         }
 
         /// <summary>Takes an instance at the prefab's default transform.</summary>
         public static GameObject Get(GameObject prefab)
         {
+            if (prefab == null) throw new ArgumentNullException(nameof(prefab));
+
+            if (_mode == PoolBridgeMode.Observe)
+            {
+                GetCount++;
+                Transform t = prefab.transform;
+                return PoolShadow.Take(prefab, t.position, t.rotation, null);
+            }
+
             GameObjectPool pool = PoolFor(prefab);
             GetCount++;
             return pool.Get();
@@ -138,6 +229,14 @@ namespace MemoryToolkit.Migration
         /// <summary>Takes an instance and places it.</summary>
         public static GameObject Get(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent = null)
         {
+            if (prefab == null) throw new ArgumentNullException(nameof(prefab));
+
+            if (_mode == PoolBridgeMode.Observe)
+            {
+                GetCount++;
+                return PoolShadow.Take(prefab, position, rotation, parent);
+            }
+
             GameObjectPool pool = PoolFor(prefab);
             GetCount++;
             return pool.Get(position, rotation, parent);
@@ -151,6 +250,27 @@ namespace MemoryToolkit.Migration
         /// </summary>
         public static T Get<T>(GameObject prefab) where T : Component
         {
+            if (prefab == null) throw new ArgumentNullException(nameof(prefab));
+
+            if (_mode == PoolBridgeMode.Observe)
+            {
+                GetCount++;
+                Transform t = prefab.transform;
+                GameObject instance = PoolShadow.Take(prefab, t.position, t.rotation, null);
+                var component = instance.GetComponent<T>();
+                if (component == null)
+                {
+                    // Same failure, same loudness, in both modes — a shadow run that
+                    // tolerates a setup error the Active path throws on would report a
+                    // projection for a prefab that cannot actually be pooled.
+                    PoolShadow.Give(instance);
+                    throw new InvalidOperationException(
+                        $"Prefab '{prefab.name}' has no {typeof(T).Name} component.");
+                }
+
+                return component;
+            }
+
             GameObjectPool pool = PoolFor(prefab);
             GetCount++;
             return pool.Get<T>();
@@ -170,6 +290,29 @@ namespace MemoryToolkit.Migration
             // boundary, and it is invisible in review because `?.` is correct C#
             // for every non-Unity type in the same file.
             if (instance == null) return false;
+
+            if (_mode == PoolBridgeMode.Observe)
+            {
+                // An instance from a pool can still arrive here if the mode was
+                // switched mid-session. Release it properly rather than destroying a
+                // pooled instance out from under its pool, which would leave the pool
+                // holding a fake-null and blame the switch for a crash much later.
+                if (instance.TryGetComponent(out PooledInstance pooled) && pooled.Owner != null)
+                {
+                    pooled.Release();
+                    ReturnCount++;
+                    return true;
+                }
+
+                if (PoolShadow.Give(instance))
+                {
+                    ReturnCount++;
+                    return true;
+                }
+
+                UnknownInstanceCount++;
+                return false;
+            }
 
             if (instance.TryGetComponent(out PooledInstance handle) && handle.Owner != null)
             {
@@ -213,7 +356,11 @@ namespace MemoryToolkit.Migration
             return instance.TryGetComponent(out PooledInstance handle) && handle.IsPooled;
         }
 
-        /// <summary>Zeroes the counters. Call at session start, or between measured runs.</summary>
+        /// <summary>
+        /// Zeroes the counters. Call at session start, or between measured runs.
+        /// Deliberately does not touch <see cref="PoolShadow"/> — a shadow run
+        /// usually spans several of these — use <see cref="PoolShadow.Reset"/> for that.
+        /// </summary>
         public static void ResetDiagnostics()
         {
             UnknownInstanceCount = 0;

@@ -16,6 +16,12 @@ namespace MemoryToolkit.Diagnostics
         PoolTrimmed,
         LowMemory,
         CollectFull,
+
+        /// <summary>PoolBridge entered Observe mode — from here, nothing is pooled.</summary>
+        ShadowModeEnabled,
+
+        /// <summary>PoolBridge left Observe mode.</summary>
+        ShadowModeDisabled,
     }
 
     /// <summary>A timestamped occurrence. <see cref="Value"/> is kind-specific (a count, or 0).</summary>
@@ -163,6 +169,13 @@ namespace MemoryToolkit.Diagnostics
             // Reused list; PoolStat holds cached strings, so this does not allocate
             // once every row has been seen at least once.
             MemoryManager.GetPoolStats(StatBuffer);
+
+            // Shadow rows are appended in the same shape as real pools, so a shadow
+            // run gets the timeline's per-pool sparkline and peak marker for free —
+            // and on those rows the peak marker is literally the warm-up count the
+            // prefab would need. Nothing downstream distinguishes them beyond the
+            // scope name.
+            Migration.PoolShadow.CollectStats(StatBuffer);
             for (int i = 0; i < StatBuffer.Count; i++)
             {
                 MemoryManager.PoolStat stat = StatBuffer[i];
@@ -268,6 +281,12 @@ namespace MemoryToolkit.Diagnostics
                     .Append(", peak active ").Append(series.PeakActive)
                     .AppendLine(series.Alive ? "" : ", DEAD");
             }
+
+            // A shadow run's whole output is a report at the end of a session, and on
+            // device the only channel for that is the log — so fold it in here rather
+            // than requiring a second call the tester will forget.
+            if (Migration.PoolShadow.Entries.Count > 0)
+                sb.AppendLine(Migration.PoolShadow.Report());
 
             if (_events != null)
             {

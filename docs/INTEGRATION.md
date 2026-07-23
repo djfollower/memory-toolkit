@@ -254,6 +254,19 @@ sentence that gets the work scheduled. `MemoryRecorder.Dump()` prints the same n
 log when there is no window to look at, and `MemoryOverlay.Show()` puts them on screen on the
 hardware where it actually hurts.
 
+That instrument measures how often the incumbent *fails*. The complementary one measures what a
+working pool would be worth. Re-point the extension methods at the bridge — the same one-line
+delegations Step 2 needs anyway — and set `PoolBridge.Mode = PoolBridgeMode.Observe`. The bridge then
+instantiates and destroys exactly as the incumbent's fallback path already does, while `PoolShadow`
+counts per prefab what a pool would have absorbed, and the peak concurrent live count that sizes it.
+Nothing is pooled, so this can ship to a playtest ahead of the migration, and the two numbers
+together are the whole business case: *the current pool falls back N times per session, and pooling
+properly would absorb M instantiates at a warm-up cost of P instances.*
+
+Read the report's unattributed count as a warning about the second registry, not as noise: those are
+returns of instances the bridge never handed out, so the projection is a floor, and the call sites
+producing them are the ones Step 5 has to find anyway.
+
 ### Step 2 — Own the registry's lifetime, keep its API
 
 The smallest change with the largest effect is decoupling the registry from the pool root's
