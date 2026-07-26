@@ -52,6 +52,10 @@ Requires Node 18+.
 | Tool | Needs play mode | Answers |
 |---|---|---|
 | `editor_status` | no | Play mode, compiling, active scene, recorder state, whether mutations are enabled |
+| `triage_project` | no | Churn, per-frame census, boot & session-boundary candidates, incumbent-pool detection → ADOPT or INTEGRATE |
+| `propose_scope_map` | no | A draft Permanent / Scene / Frame map from the triage |
+| `suggest_budget` | no | Recorded peaks → a draft MemoryBudget, grouped by scope |
+| `explain_finding` | no | A finding → the field-guide section that says why it breaks and what to do |
 | `validate_prefab` | no | Can this prefab survive being pooled? |
 | `validate_project` | no | Which prefabs in this folder can't? |
 | `get_pool_stats` | yes | What is pooled right now, warmed or lazy, plus gets/returns/escapes |
@@ -70,13 +74,33 @@ mode" retries correctly, whereas an agent handed `{"pools": []}` concludes nothi
 ## The loop this is for
 
 ```
+triage_project             → ADOPT or INTEGRATE, with the boot entry, the session
+                             boundary, and the hottest-churn prefab already located
+propose_scope_map          → a draft Permanent/Scene/Frame map to react to
 validate_prefab            → fix what statically disqualifies the prefab
 recorder_control start     → then play, and exercise the transition (load the level, end the match)
 get_recorder_timeline      → peakActive per pool is the warm-up count; escapes > 0 means
                              something still bypasses the pool
+suggest_budget             → turn those peaks into a draft MemoryBudget
 warmup_pool                → try the number before writing it into game code
 dispose_scope              → force the scene-unload case and see what still holds instances
+explain_finding            → any finding above → the guide section behind it
 ```
+
+`triage_project` is the method of `docs/ADOPTION.md` §1 run as data: the six greps and the
+Update/FixedUpdate census, plus incumbent-pool detection that branches to ADOPTION or INTEGRATION
+automatically. It is heuristic and says so — every boot and boundary candidate carries the file and
+line it was drawn from, so a wrong guess is arguable rather than authoritative, and assigning the
+final lifetimes stays the human decision the guide reserves for one. Both reference codebases the
+guides were written from reproduce their documented scope maps when the shipped triage is run against
+them cold: the greenfield project resolves to ADOPT with its app-loader as the Permanent owner, the
+brownfield one to INTEGRATE with its init-flow manager, and its ~400 pool-mentioning files detected
+as the incumbent.
+
+`explain_finding` is how a finding connects back to the method: it maps a validator issue, a timeline
+anomaly, or an analyzer rule (MTK001/MTK002/MTK007) to the guide section that explains the failure and
+the fix. Call it with no topic to list the slugs. The guides are referenced by section rather than
+embedded, so the server stays tool-only — no separate resources channel to keep in sync.
 
 Sizing from `peakActive` rather than from the instantaneous count is the whole point of reading the
 timeline: a snapshot taken between waves shows a pool at zero. So is watching escapes — a pool that

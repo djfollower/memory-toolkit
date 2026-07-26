@@ -1,6 +1,6 @@
 {
   "name": "com.dungphan.memorytoolkit",
-  "version": "0.12.0",
+  "version": "1.0.0",
   "displayName": "Memory Toolkit",
   "description": "Exemplary memory-handling utilities for Unity: object/GameObject pooling, collection and StringBuilder caches, a per-frame linear allocator over native memory, pool warm-up and low-memory trimming. Designed to minimize GC pressure and heap fragmentation.",
   "unity": "6000.0",
@@ -49,6 +49,11 @@
       "displayName": "Low Memory Response",
       "description": "A game-side cache that sheds entries on MemoryManager.LowMemoryTrimmed alongside the automatic pool trim.",
       "path": "Samples~/LowMemoryResponse"
+    },
+    {
+      "displayName": "Device Soak",
+      "description": "Instrument a development build for the field: periodic disk reports in the CI schema, plus memory breadcrumbs into a crash reporter (Crashlytics sink included).",
+      "path": "Samples~/DeviceSoak"
     }
   ]
 }

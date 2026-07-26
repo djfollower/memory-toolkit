@@ -305,6 +305,32 @@ namespace MemoryToolkit.Diagnostics
             return StringBuilderCache.GetStringAndRelease(sb);
         }
 
+        /// <summary>
+        /// Writes <see cref="Dump"/> to a file and returns its path, or null on
+        /// failure. For a device where the log is not easily reachable but the file
+        /// system is. Never throws — a diagnostic that crashes the run it is observing
+        /// is worse than one that quietly fails.
+        /// </summary>
+        public static string DumpToFile(string path = null)
+        {
+            try
+            {
+                string target = string.IsNullOrEmpty(path)
+                    ? System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "mtk-dump.txt")
+                    : path;
+
+                string dir = System.IO.Path.GetDirectoryName(target);
+                if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+                System.IO.File.WriteAllText(target, Dump());
+                return target;
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"[MemoryToolkit] recorder dump to file failed: {e.Message}");
+                return null;
+            }
+        }
+
         private static double Now => UnityEngine.Time.realtimeSinceStartupAsDouble;
     }
 

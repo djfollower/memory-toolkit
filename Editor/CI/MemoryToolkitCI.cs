@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using MemoryToolkit.Budgets;
+using MemoryToolkit.Diagnostics;
 using UnityEditor;
 using UnityEngine;
 
@@ -123,44 +124,12 @@ namespace MemoryToolkit.Editor.CI
         /// <returns>True when the session is within budget.</returns>
         public static bool WriteSessionReport(string path, MemoryBudget budget = null, MemoryBudgetTier? tier = null)
         {
-            MemoryBudgetTier t = tier ?? DeviceTier.Current;
-            int escapes = Migration.PoolBridge.UnknownInstanceCount;
-            long managedBytes = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong();
-
-            int ceilingMb = budget != null ? budget.ManagedHeapCeilingMb.Get(t) : 0;
-            long ceilingBytes = (long)ceilingMb * 1024 * 1024;
-            bool overCeiling = ceilingBytes > 0 && managedBytes > ceilingBytes;
-            bool passed = escapes == 0 && !overCeiling;
-
-            var sb = new StringBuilder();
-            sb.Append("{\"schemaVersion\":").Append(JsonSchemaVersion)
-                .Append(",\"kind\":\"session\"")
-                .Append(",\"tier\":\"").Append(t).Append('"')
-                .Append(",\"passed\":").Append(passed ? "true" : "false")
-                .Append(",\"escapes\":").Append(escapes)
-                .Append(",\"gets\":").Append(Migration.PoolBridge.GetCount)
-                .Append(",\"returns\":").Append(Migration.PoolBridge.ReturnCount)
-                .Append(",\"lazyPools\":").Append(Migration.PoolBridge.LazyPoolCount)
-                .Append(",\"managedUsedBytes\":").Append(managedBytes)
-                .Append(",\"managedCeilingBytes\":").Append(ceilingBytes)
-                .Append(",\"pools\":[");
-
-            var stats = new List<MemoryManager.PoolStat>();
-            MemoryManager.GetPoolStats(stats);
-            for (int i = 0; i < stats.Count; i++)
-            {
-                if (i > 0) sb.Append(',');
-                sb.Append("{\"scope\":\"").Append(Escape(stats[i].ScopeName))
-                    .Append("\",\"prefab\":\"").Append(Escape(stats[i].PrefabName))
-                    .Append("\",\"active\":").Append(stats[i].CountActive)
-                    .Append(",\"inactive\":").Append(stats[i].CountInactive)
-                    .Append(",\"warmedUp\":").Append(stats[i].WasWarmedUp ? "true" : "false")
-                    .Append('}');
-            }
-
-            sb.Append("]}");
-            WriteAllText(path, sb.ToString());
-            return passed;
+            // Delegates to the runtime builder so the session schema has exactly one
+            // definition — the device soak dump and this gate must be parseable by the
+            // same reader, or a device dump is one nobody reads.
+            string json = MemorySessionReport.BuildJson(budget, tier, out MemorySessionReport.Result result);
+            WriteAllText(path, json);
+            return result.Passed;
         }
 
         // ---- Arguments ---------------------------------------------------------------

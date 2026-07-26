@@ -1,5 +1,77 @@
 # Changelog
 
+## [1.0.0] - 2026-07-26
+
+The toolkit's best asset was never the API — it was the *method* in the two field guides: how to walk
+into an unfamiliar Unity codebase and find the memory that matters. The first step of that method is
+mechanical, and until now it lived only as prose a person had to read. This release runs it as code,
+and with it the package covers the whole arc: measure → configure → enforce → observe in the field →
+triage the next project.
+
+### Added
+- **`triage_project`** (MCP) — the adoption triage of `docs/ADOPTION.md` §1 as data: Instantiate/
+  Destroy churn and its ratio, the Update/LateUpdate/FixedUpdate census, boot-entry and session-
+  boundary candidates, the hottest-churn file, and incumbent-pool detection that branches to the
+  ADOPTION or the INTEGRATION guide automatically. Backed by `ProjectTriage`, which depends only on
+  `System.IO` and regex so the shipped code can be pointed at any directory.
+- **`propose_scope_map`** (MCP) — a draft of the §2 Permanent / Scene / Frame map from the triage,
+  each tier carrying a confidence and the evidence behind it.
+- **`suggest_budget`** (MCP) — the recorded timeline's peak-active per pool as a draft `MemoryBudget`,
+  grouped by scope.
+- **`explain_finding`** (MCP) + **`FieldGuideIndex`** — maps a validator issue, timeline anomaly, or
+  analyzer rule (MTK001/MTK002/MTK007) to the guide section that says why it breaks and what to do.
+  The seam that makes the agent's method the documented method.
+
+### Notes
+- **Acceptance was a run against the two real codebases the guides are built on**, not a synthetic
+  scene. Cold, the shipped triage reproduces their documented scope maps: the greenfield merge game
+  resolves to ADOPT (568 files, 121 Instantiate, exactly 1 file mentioning a pool, `AppLoader` as the
+  Permanent owner, `GameplayManager` among the session boundaries); the brownfield card game resolves
+  to INTEGRATE (`GameInitFlowManager` as the boot entry, ~400 pool-mentioning files detected as the
+  incumbent). The one imperfect number is the Update census — the regex counts every `void Update(`
+  under `Assets`, so it runs higher than the guide's hand-count of gameplay Updates; FixedUpdate
+  matched exactly. Triage is heuristic and labelled as such: every candidate carries its file and
+  line, and assigning the final lifetimes stays the human decision.
+- The guides are referenced by section, not embedded as MCP resources, so the server stays tool-only
+  with nothing extra to keep in sync.
+
+## [0.13.0] - 2026-07-26
+
+Every diagnostic so far stopped at the editor or at a pane a human watches. Memory failures do not
+happen there — they happen after forty minutes on a low-end phone, to a QA tester who cannot read an
+overlay, or to a player whose OS kills the app and sends a stack trace with no memory context. This
+release takes the toolkit off the desk.
+
+### Added
+- **`MemorySoak`** — writes a session report to disk on an interval during an unattended run, in the
+  **same schema the CI gate writes**, so an overnight device soak becomes an artifact the existing
+  reader parses. `Begin(intervalSeconds)` defaults to `persistentDataPath/mtk-soak`, names files by
+  UTC timestamp, keeps the most recent 20, and writes on pause and quit so the last report is closest
+  to the failure. `DumpNow()` for a report at a known moment; `Stop()` to end it.
+- **`MemoryBreadcrumbs`** + **`IBreadcrumbSink`** — pushes a fixed, budgeted set of memory facts
+  (escapes, live scopes, busiest pools, managed heap, low-memory count) into a crash reporter, so an
+  OOM arrives with a postmortem attached. Wired to `Application.lowMemory` automatically, captured
+  before the trim so it records the state that triggered the warning.
+- **`MemorySessionReport`** (runtime) — the session-report JSON now has a single definition in the
+  runtime assembly; `MemoryToolkitCI.WriteSessionReport` delegates to it, so a device dump and a CI
+  report can never drift out of a shared reader's reach.
+- **`MemoryRecorder.DumpToFile(path)`** — the text report to a file, for a device where the log is
+  hard to reach but the filesystem is not.
+- **`Samples~/DeviceSoak`** — a `DeviceSoakBootstrapper` and a Crashlytics `IBreadcrumbSink`, wired
+  end to end. Copy it, point one line at your reporter, and a dev build is instrumented.
+- **[`docs/DEVICE.md`](docs/DEVICE.md)**.
+
+### Notes
+- The breadcrumb key set is a fixed handful (under ten keys, each under 1 KB) on purpose. Crash
+  reporters cap custom keys hard (Crashlytics: 64 keys × 1 KB) and silently truncate an over-cap
+  payload — dropping exactly the fields you added. So breadcrumbs send a "busiest pools" summary, not
+  a key per pool; the per-pool detail lives in the soak file.
+- The toolkit ships **no analytics dependency**. `IBreadcrumbSink` is one method and the Crashlytics
+  adapter is a sample.
+- Soak and breadcrumbs compile out entirely outside the editor and development builds. Every writer
+  swallows its own exceptions — a diagnostic that crashes the run it observes is worse than one that
+  quietly fails.
+
 ## [0.12.0] - 2026-07-26
 
 The field guides describe call-site failures in prose, and prose does not survive contact with a

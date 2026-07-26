@@ -123,6 +123,52 @@ namespace MemoryToolkit.Editor.Mcp
             },
             new Tool
             {
+                Name = "triage_project",
+                Description =
+                    "Runs the adoption triage of docs/ADOPTION.md §1 as data: Instantiate/Destroy churn, the " +
+                    "Update/LateUpdate/FixedUpdate census, boot-entry and session-boundary candidates, the hottest " +
+                    "churn file, and whether an incumbent pool already exists — which decides whether to follow the " +
+                    "ADOPTION or the INTEGRATION guide. The output is a scope map to reason about, not a fix list. " +
+                    "Heuristic: every candidate carries the evidence it was drawn from.",
+                Schema = Schema(
+                    Property("folder", "string", "Folder to triage. Default: the project's Assets folder.")),
+                Run = TriageProject,
+            },
+            new Tool
+            {
+                Name = "propose_scope_map",
+                Description =
+                    "Drafts the scope map of docs/ADOPTION.md §2 from a triage: boot entry point → Permanent, the " +
+                    "session-teardown class → Scene, per-frame query sites → Frame. A starting point for the one " +
+                    "decision the guide says is a human's — assigning lifetimes — not a substitute for it.",
+                Schema = Schema(
+                    Property("folder", "string", "Folder to triage first. Default: the project's Assets folder.")),
+                Run = ProposeScopeMap,
+            },
+            new Tool
+            {
+                Name = "suggest_budget",
+                Description =
+                    "Turns the recorded timeline into a draft MemoryBudget: each pool's peak active becomes its " +
+                    "warm-up count, grouped by scope. Requires a recording (recorder_control start, then exercise a " +
+                    "representative session). The peak is the warm-up count; the instantaneous count cannot size a pool.",
+                Schema = Schema(
+                    Property("tier", "string", "Tier to write the peaks into: Low, Medium, or High. Default: High.")),
+                Run = SuggestBudget,
+            },
+            new Tool
+            {
+                Name = "explain_finding",
+                Description =
+                    "Maps a finding — a validator issue, a timeline anomaly, an analyzer rule — to the field-guide " +
+                    "section that explains why it breaks and what to do. Pass a topic slug; call with no topic to " +
+                    "list them. This is how a finding connects back to the method in the guides.",
+                Schema = Schema(
+                    Property("topic", "string", "Topic slug, e.g. 'stop-action-destroy' or 'escapes'. Omit to list all.")),
+                Run = ExplainFinding,
+            },
+            new Tool
+            {
                 Name = "warmup_pool",
                 Description =
                     "Pre-instantiates a prefab's pool in a scope, exactly as a loading screen would. Use it to " +
@@ -294,6 +340,213 @@ namespace MemoryToolkit.Editor.Mcp
                 .Set("totalErrors", scan.TotalErrors)
                 .Set("totalWarnings", scan.TotalWarnings)
                 .Set("reports", reports);
+        }
+
+        // ---- Handlers: triage --------------------------------------------------------
+
+        private static JsonValue TriageProject(JsonValue arguments)
+        {
+            string folder = ResolveTriageFolder(arguments["folder"].AsString(null));
+            ProjectTriage.Result triage = ProjectTriage.Run(folder);
+
+            JsonValue boot = JsonValue.Array();
+            foreach (ProjectTriage.Evidence e in triage.BootCandidates) boot.Add(EvidenceJson(e));
+
+            JsonValue boundaries = JsonValue.Array();
+            foreach (ProjectTriage.Evidence e in triage.SessionBoundaries) boundaries.Add(EvidenceJson(e));
+
+            JsonValue incumbent = JsonValue.Array();
+            foreach (ProjectTriage.Evidence e in triage.IncumbentPoolEvidence) incumbent.Add(EvidenceJson(e));
+
+            // The Destroy:Instantiate ratio is a diagnostic in itself — roughly 2:1 is
+            // the signature of a consume-two-produce-one loop (merge/match games), the
+            // observation ADOPTION §1 grep 3 is built on.
+            double ratio = triage.InstantiateCalls > 0
+                ? Math.Round((double)triage.DestroyCalls / triage.InstantiateCalls, 2)
+                : 0;
+
+            return JsonValue.Object()
+                .Set("folder", folder)
+                .Set("filesScanned", triage.FilesScanned)
+                .Set("recommendedGuide", triage.RecommendedGuide)
+                .Set("guideReason", triage.HasIncumbentPool
+                    ? "An incumbent pool was detected; churn greps understate the real churn. Follow docs/INTEGRATION.md."
+                    : "No pooling found; effectively greenfield. Follow docs/ADOPTION.md.")
+                .Set("instantiateCalls", triage.InstantiateCalls)
+                .Set("destroyCalls", triage.DestroyCalls)
+                .Set("destroyToInstantiateRatio", ratio)
+                .Set("filesMentioningPool", triage.FilesMentioningPool)
+                .Set("hasIncumbentPool", triage.HasIncumbentPool)
+                .Set("updateMethods", triage.UpdateMethods)
+                .Set("lateUpdateMethods", triage.LateUpdateMethods)
+                .Set("fixedUpdateMethods", triage.FixedUpdateMethods)
+                .Set("bootCandidates", boot)
+                .Set("sessionBoundaries", boundaries)
+                .Set("hottestChurnFile", triage.HottestChurnFile.HasValue
+                    ? EvidenceJson(triage.HottestChurnFile.Value)
+                    : JsonValue.Null)
+                .Set("incumbentPoolEvidence", incumbent)
+                .Set("note",
+                    "Heuristic triage. Candidates are ranked signals, not answers — the scope map is a human " +
+                    "decision (docs/ADOPTION.md §2). Call propose_scope_map for a draft.");
+        }
+
+        private static JsonValue ProposeScopeMap(JsonValue arguments)
+        {
+            string folder = ResolveTriageFolder(arguments["folder"].AsString(null));
+            ProjectTriage.Result triage = ProjectTriage.Run(folder);
+
+            JsonValue tiers = JsonValue.Array();
+
+            string permanentOwner = triage.BootCandidates.Count > 0
+                ? triage.BootCandidates[0].Text
+                : "the boot/app-loader entry point (none found by name — identify it manually)";
+            tiers.Add(JsonValue.Object()
+                .Set("tier", "Permanent")
+                .Set("owner", permanentOwner)
+                .Set("contents", "Config services, catalogs, audio, anything reachable from boot and never torn down. " +
+                    "Pin configs loaded in a momentary boot scene to Permanent.")
+                .Set("confidence", triage.BootCandidates.Count > 0 ? "medium" : "low"));
+
+            string sceneOwner = triage.SessionBoundaries.Count > 0
+                ? $"{triage.SessionBoundaries[0].Text} ({System.IO.Path.GetFileName(triage.SessionBoundaries[0].Path)})"
+                : "the class whose OnDestroy tears down a play session (none obvious — identify it manually)";
+            tiers.Add(JsonValue.Object()
+                .Set("tier", "Scene")
+                .Set("owner", sceneOwner)
+                .Set("contents", "Everything that OnDestroy currently disposes by hand — the natural scope boundary. " +
+                    "Create the scope before pooling anything (docs/ADOPTION.md §3 step 1).")
+                .Set("confidence", triage.SessionBoundaries.Count > 0 ? "medium" : "low"));
+
+            tiers.Add(JsonValue.Object()
+                .Set("tier", "Frame")
+                .Set("owner", "per-frame query and physics code")
+                .Set("contents", $"{triage.UpdateMethods} Update / {triage.FixedUpdateMethods} FixedUpdate bodies to " +
+                    "read for per-frame allocation; move transient scratch into MemoryManager.FrameScratch.")
+                .Set("confidence", "low"));
+
+            string firstPrefab = triage.HottestChurnFile.HasValue
+                ? System.IO.Path.GetFileName(triage.HottestChurnFile.Value.Path)
+                : "the highest-churn prefab";
+
+            return JsonValue.Object()
+                .Set("folder", folder)
+                .Set("recommendedGuide", triage.RecommendedGuide)
+                .Set("tiers", tiers)
+                .Set("firstToPool",
+                    $"Start with the prefab that churns most — around {firstPrefab}. Pool one, measure, then widen " +
+                    "(docs/ADOPTION.md §3 step 2). Confirm the choice with shadow mode, not the call-site count.")
+                .Set("note",
+                    "A draft. Assigning lifetimes is the decision the guide reserves for a human; this ranks the " +
+                    "candidates, it does not make the call.");
+        }
+
+        private static JsonValue SuggestBudget(JsonValue arguments)
+        {
+            string tier = arguments["tier"].AsString("High");
+            IReadOnlyList<PoolSeries> series = MemoryRecorder.PoolSeriesList;
+
+            if (series.Count == 0)
+            {
+                return JsonValue.Object()
+                    .Set("error", "No recording. Call recorder_control start, exercise a representative session, " +
+                        "then call this — a peak is only as good as the session that produced it.");
+            }
+
+            // Group peaks by scope, mirroring the MemoryBudget asset's shape so the
+            // output can be transcribed directly, or fed to a budget writer.
+            var byScope = new Dictionary<string, JsonValue>();
+            foreach (PoolSeries s in series)
+            {
+                if (s.PeakActive <= 0) continue;
+
+                if (!byScope.TryGetValue(s.ScopeName, out JsonValue pools))
+                {
+                    pools = JsonValue.Array();
+                    byScope[s.ScopeName] = pools;
+                }
+
+                pools.Add(JsonValue.Object()
+                    .Set("prefab", s.PrefabName)
+                    .Set("warmup", s.PeakActive)
+                    .Set("maxSize", Math.Max(s.PeakActive, s.PeakActive * 2))
+                    .Set("wasWarmedUp", s.WasWarmedUp));
+            }
+
+            JsonValue scopes = JsonValue.Array();
+            foreach (KeyValuePair<string, JsonValue> kvp in byScope)
+                scopes.Add(JsonValue.Object().Set("scopeName", kvp.Key).Set("pools", kvp.Value));
+
+            return JsonValue.Object()
+                .Set("tier", tier)
+                .Set("scopes", scopes)
+                .Set("note",
+                    "Draft warm-up counts from this session's peak active per pool. Direct prefab references belong " +
+                    "only in the Permanent scope; reference level content by addressable key (docs/BUDGETS.md). " +
+                    "Widen the session before trusting the numbers.");
+        }
+
+        private static JsonValue ExplainFinding(JsonValue arguments)
+        {
+            string topic = arguments["topic"].AsString(null);
+
+            if (string.IsNullOrEmpty(topic))
+            {
+                JsonValue topics = JsonValue.Array();
+                foreach (string t in FieldGuideIndex.Topics) topics.Add(JsonValue.String(t));
+                return JsonValue.Object()
+                    .Set("topics", topics)
+                    .Set("note", "Pass one of these as 'topic' to get the guide section that explains it.");
+            }
+
+            if (!FieldGuideIndex.TryGet(topic, out FieldGuideIndex.Entry entry))
+            {
+                JsonValue topics = JsonValue.Array();
+                foreach (string t in FieldGuideIndex.Topics) topics.Add(JsonValue.String(t));
+                return JsonValue.Object()
+                    .Set("error", $"Unknown topic '{topic}'.")
+                    .Set("topics", topics);
+            }
+
+            return JsonValue.Object()
+                .Set("topic", topic)
+                .Set("title", entry.Title)
+                .Set("guide", entry.Guide)
+                .Set("section", entry.Section)
+                .Set("why", entry.Summary)
+                .Set("action", entry.Action);
+        }
+
+        private static string ResolveTriageFolder(string folder)
+        {
+            if (string.IsNullOrEmpty(folder)) return Application.dataPath;
+
+            // Accept both an absolute path and a project-relative "Assets/..." one, so
+            // an agent can pass whichever it has.
+            if (System.IO.Path.IsPathRooted(folder)) return folder;
+
+            string trimmed = folder.Replace('\\', '/');
+            if (trimmed.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("Assets", StringComparison.OrdinalIgnoreCase))
+            {
+                string rel = trimmed.Length > "Assets".Length ? trimmed.Substring("Assets".Length).TrimStart('/') : "";
+                return string.IsNullOrEmpty(rel) ? Application.dataPath : System.IO.Path.Combine(Application.dataPath, rel);
+            }
+
+            return System.IO.Path.Combine(Application.dataPath, trimmed);
+        }
+
+        private static JsonValue EvidenceJson(in ProjectTriage.Evidence e)
+        {
+            // Report paths project-relative — an agent reasons in Assets/... terms, and
+            // an absolute path from the triage root just adds noise.
+            string path = e.Path.Replace('\\', '/');
+            int idx = path.IndexOf("/Assets/", StringComparison.Ordinal);
+            if (idx >= 0) path = path.Substring(idx + 1);
+
+            JsonValue json = JsonValue.Object().Set("path", path).Set("evidence", e.Text);
+            if (e.Line > 0) json.Set("line", e.Line);
+            return json;
         }
 
         // ---- Handlers: live state ----------------------------------------------------

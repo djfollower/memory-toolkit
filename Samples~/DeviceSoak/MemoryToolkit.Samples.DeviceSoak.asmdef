@@ -1,0 +1,16 @@
+{
+    "name": "MemoryToolkit.Samples.DeviceSoak",
+    "rootNamespace": "MemoryToolkit.Samples.DeviceSoak",
+    "references": [
+        "MemoryToolkit.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

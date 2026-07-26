@@ -163,6 +163,11 @@ namespace MemoryToolkit
         internal static void OnLowMemory()
         {
             MemoryRecorder.RecordEvent(MemoryEventKind.LowMemory, "Application.lowMemory");
+
+            // Capture breadcrumbs before trimming, so a crash reporter records the
+            // state that triggered the warning rather than the shrunk state after it.
+            MemoryBreadcrumbs.OnLowMemory();
+
             for (int i = 0; i < Scopes.Count; i++)
                 Scopes[i].Trim(LowMemoryKeepPerPool);
             Resources.UnloadUnusedAssets();

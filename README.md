@@ -170,6 +170,15 @@ var loginScope = MemoryManager.CreateSceneScope();                   // momentar
 
 Read it like this: in steady state a pool's `total` must stop growing — if it keeps climbing you are leaking instances (missing `Release`) or your warm-up count is too low; a scope that should be dead but still appears means something cached a reference across a load. Size warm-up counts and arena capacities from the peaks shown here, not guesses. Pair with the **Memory Profiler** package (already in this project) and the Profiler's *GC Alloc* column: gameplay frames should show **0 B** allocated.
 
+### On device and in the field
+
+The overlay and Dump stop at "look at the screen"; memory failures happen after 40 minutes on a
+low-end phone. `MemorySoak.Begin()` writes periodic session reports to disk in the CI schema, so an
+overnight QA run becomes a parseable artifact, and `MemoryBreadcrumbs` pushes escapes, live scopes
+and the busiest pools into a crash reporter so an OOM arrives with a memory postmortem attached
+instead of a bare stack trace. No analytics dependency — the crash-reporter sink is one method. See
+[`docs/DEVICE.md`](docs/DEVICE.md) and the **Device Soak** sample.
+
 ### Timeline: what a snapshot cannot show
 
 Press **Record** in the Inspector toolbar to start `MemoryRecorder`, and the Timeline pane fills in above the scope list.
@@ -193,6 +202,13 @@ agent over MCP: `validate_prefab` / `validate_project`, live pool and heap state
 the timeline (with `peakActive` per pool — the warm-up count — and derived findings), and, behind a
 second opt-in, the mutating actions the Inspector's buttons perform (`warmup_pool`, `trim_pools`,
 `dispose_scope`, `collect_full`).
+
+It also runs the adoption *method*, not just the tools: `triage_project` performs the six greps and
+per-frame census of [`docs/ADOPTION.md`](docs/ADOPTION.md) §1, detects an incumbent pool and branches
+to the right guide, `propose_scope_map` drafts the lifetime map, `suggest_budget` turns recorded peaks
+into a draft `MemoryBudget`, and `explain_finding` links any finding back to the guide section behind
+it. Run cold against the two production codebases the guides were written from, the triage reproduces
+their documented scope maps.
 
 The server runs *inside* the Editor because that is the only place the answers exist: the validator
 reflects over compiled component types and reads deserialized prefab data, and the pool stats and
