@@ -82,6 +82,35 @@ namespace MemoryToolkit.Tests
         }
 
         [Test]
+        public void OnDestroy_DeclaredByAFrameworkComponent_IsNotFlagged()
+        {
+            // Regression from the Melon dogfood: UGUI's Image declares OnDestroy for
+            // its own bookkeeping, not for cleanup a team could move. Flagging it (and
+            // Button, LayoutGroup, TextMeshProUGUI...) buried the real findings under
+            // thousands of framework warnings — ~65% of the output on a UI-heavy
+            // project. Framework OnDestroy is not a pooling hazard the team owns.
+            _prefab.AddComponent<UnityEngine.UI.Image>();
+
+            PoolSafetyValidator.Validate(_prefab, _issues);
+
+            Assert.That(HasIssue(PoolSafetyValidator.Severity.Warning, "declares OnDestroy"), Is.False,
+                "a UnityEngine.* component's OnDestroy must not be flagged");
+        }
+
+        [Test]
+        public void OnDestroy_OnAUserTypeBesideAFrameworkComponent_IsStillFlagged()
+        {
+            // The filter must not go too far: a project script's OnDestroy on the same
+            // prefab as framework components is still the hazard the check exists for.
+            _prefab.AddComponent<UnityEngine.UI.Image>();
+            _prefab.AddComponent<CleansUpInOnDestroy>();
+
+            PoolSafetyValidator.Validate(_prefab, _issues);
+
+            Assert.That(HasIssue(PoolSafetyValidator.Severity.Warning, "declares OnDestroy"), Is.True);
+        }
+
+        [Test]
         public void OnDestroy_WithIPoolable_DownGradesToInfo()
         {
             _prefab.AddComponent<PoolableWithOnDestroy>();

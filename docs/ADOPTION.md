@@ -90,6 +90,29 @@ _sceneScope = MemoryManager.CreateSceneScope();
 _sceneScope.Dispose();
 ```
 
+Real teardown is rarely all `IDisposable`, and this is where the clean story above meets friction.
+A gameplay manager's `OnDestroy` typically mixes three kinds of cleanup: services that implement
+`IDisposable`, MonoBehaviours that expose a `Dispose()` **method** but do not implement the interface,
+and plain work — an event unsubscribe, a `Cleanup()` call. `scope.Register(x)` is constrained to
+`IDisposable`, so it accepts only the first kind; feeding it a MonoBehaviour-with-a-`Dispose()`-method
+is a compile error, not a runtime surprise. The other two go through `scope.OnDisposed(...)`:
+
+```csharp
+// A real teardown, folded into the scope. Registration order is reversed because
+// disposal is strict LIFO — so this reproduces the old OnDestroy's order exactly.
+_sceneScope = MemoryManager.CreateSceneScope();
+_sceneScope.OnDisposed(() => _expressionController?.Dispose()); // IDisposable, but ordering-sensitive
+_sceneScope.OnDisposed(() => _boostService.Dispose());          // MonoBehaviour: has Dispose(), isn't IDisposable
+_sceneScope.OnDisposed(() => _goalService.Dispose());           //   → OnDisposed, not Register
+_sceneScope.OnDisposed(() => _prizeService.OnScore -= OnScore); // a plain unsubscribe
+_sceneScope.OnDisposed(() => _dropper.Cleanup());               // a plain method call
+_sceneScope.Register(_pieceManager);                            // IDisposable → disposed first (LIFO)
+```
+
+Use `Register` for anything the scope should genuinely own and dispose; reach for `OnDisposed` for
+teardown that is not `IDisposable` or whose order you want to pin by hand. Both run in strict reverse
+of registration, so a teardown that was correct as a hand-ordered `OnDestroy` stays correct.
+
 ### Step 2 — Pool the one prefab that churns most
 
 Not all 120 call sites. One. In the merge game that is the piece, whose clone and destroy paths look

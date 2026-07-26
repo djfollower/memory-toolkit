@@ -1,9 +1,9 @@
 {
   "name": "com.dungphan.memorytoolkit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Memory Toolkit",
   "description": "Exemplary memory-handling utilities for Unity: object/GameObject pooling, collection and StringBuilder caches, a per-frame linear allocator over native memory, pool warm-up and low-memory trimming. Designed to minimize GC pressure and heap fragmentation.",
-  "unity": "6000.0",
+  "unity": "2022.3",
   "author": {
     "name": "Dung Phan",
     "email": "dung.phanv@gmail.com"

@@ -158,7 +158,14 @@ namespace MemoryToolkit.Editor
                 Type type = component.GetType();
                 bool isPoolable = component is IPoolable;
 
-                if (DeclaresMessage(type, "OnDestroy"))
+                // A framework component (UGUI's Image, TMP_Text, a LayoutGroup) declares
+                // OnDestroy for its own internal bookkeeping, not for cleanup a team could
+                // move to OnReturnedToPool — and Unity's own components are pool-safe by
+                // design, which is why UGUI is used in pooled scroll lists everywhere.
+                // Flagging them buries the real findings: on a UI-heavy project this check
+                // fired thousands of times on Image/Button/TextMeshProUGUI alone. Only a
+                // message DECLARED BY A PROJECT TYPE is a hazard the team owns.
+                if (DeclaresMessageInUserType(type, "OnDestroy"))
                 {
                     results.Add(new Issue(isPoolable ? Severity.Info : Severity.Warning, path,
                         $"{type.Name} declares OnDestroy. Pooled instances are released, not destroyed, " +
@@ -168,7 +175,8 @@ namespace MemoryToolkit.Editor
                         go));
                 }
 
-                if (!isPoolable && (DeclaresMessage(type, "OnEnable") || DeclaresMessage(type, "OnDisable")))
+                if (!isPoolable &&
+                    (DeclaresMessageInUserType(type, "OnEnable") || DeclaresMessageInUserType(type, "OnDisable")))
                 {
                     results.Add(new Issue(Severity.Info, path,
                         $"{type.Name} declares OnEnable/OnDisable. Unlike OnDestroy these DO fire on every " +
@@ -177,7 +185,7 @@ namespace MemoryToolkit.Editor
                         go));
                 }
 
-                if (DeclaresMessage(type, "Awake") || DeclaresMessage(type, "Start"))
+                if (DeclaresMessageInUserType(type, "Awake") || DeclaresMessageInUserType(type, "Start"))
                 {
                     results.Add(new Issue(Severity.Info, path,
                         $"{type.Name} declares Awake/Start. These run once per instance, not once per " +
@@ -188,14 +196,24 @@ namespace MemoryToolkit.Editor
         }
 
         /// <summary>
-        /// True when <paramref name="type"/> or a subclass of MonoBehaviour above
-        /// it declares a parameterless method named <paramref name="name"/>.
-        /// Unity messages may be private, and base classes count.
+        /// True when a <b>project</b> type in the hierarchy declares a parameterless
+        /// method named <paramref name="name"/>.
+        ///
+        /// <para>The message is attributed to the type that declares it, not to the
+        /// leaf component: a UGUI Image reports OnDestroy, but it is declared in the
+        /// framework, and the team has no cleanup there to move. Only a message
+        /// declared by a type outside Unity's own assemblies is a pooling hazard the
+        /// team owns — see the call site.</para>
         /// </summary>
-        private static bool DeclaresMessage(Type type, string name)
+        private static bool DeclaresMessageInUserType(Type type, string name)
         {
             for (Type t = type; t != null && t != typeof(MonoBehaviour); t = t.BaseType)
             {
+                if (IsFrameworkType(t)) continue;
+
+                // MessageFlags is DeclaredOnly, so a method inherited from a framework
+                // base is attributed to that base on its own iteration, not to this
+                // user subclass — which is what the per-type framework skip relies on.
                 foreach (MethodInfo method in t.GetMethods(MessageFlags))
                 {
                     if (method.Name == name && method.GetParameters().Length == 0)
@@ -204,6 +222,23 @@ namespace MemoryToolkit.Editor
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// True for types Unity or the BCL owns — anything a game team did not write
+        /// and cannot change. Matched by namespace so it holds without a reference to
+        /// each framework assembly.
+        /// </summary>
+        private static bool IsFrameworkType(Type type)
+        {
+            string ns = type.Namespace;
+            if (string.IsNullOrEmpty(ns)) return false; // a team's script with no namespace is theirs
+
+            return ns == "UnityEngine" || ns.StartsWith("UnityEngine.", StringComparison.Ordinal)
+                || ns == "UnityEditor" || ns.StartsWith("UnityEditor.", StringComparison.Ordinal)
+                || ns == "Unity" || ns.StartsWith("Unity.", StringComparison.Ordinal)
+                || ns == "TMPro" || ns.StartsWith("TMPro.", StringComparison.Ordinal)
+                || ns == "System" || ns.StartsWith("System.", StringComparison.Ordinal);
         }
 
         private static string PathOf(Transform root, Transform target)

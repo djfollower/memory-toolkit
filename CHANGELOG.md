@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.0.1] - 2026-07-26
+
+Papercuts from dogfooding the 1.0 adoption arc end to end on a real production project (a shipped
+merge game, 512 prefabs, ~570 scripts). Everything was *verified* at 1.0; this is what *using* it
+surfaced.
+
+### Fixed
+- **`PoolSafetyValidator` drowned real findings in framework noise.** The OnDestroy/OnEnable/Awake
+  checks flagged every UGUI and TMP component (`Image`, `Button`, `TextMeshProUGUI`, layout groups)
+  because those framework types declare the messages for their own bookkeeping — cleanup a team
+  cannot move. On the reference project this was ~65% of output (3,141 warnings). The checks now
+  attribute a message to its **declaring type** and skip framework namespaces (`UnityEngine.*`,
+  `Unity.*`, `UnityEditor.*`, `TMPro.*`, `System.*`); the same project drops to 1,059 warnings, all
+  project-owned, with the two real errors (a `stopAction: 2` FX prefab and a missing-script prefab)
+  unchanged.
+
+### Changed
+- **`package.json` `unity` floor lowered from `6000.0` to `2022.3`.** The toolkit compiles and
+  integrates on 2022.3 LTS with zero errors — the old floor locked out exactly the studios most
+  likely to need it, for no real API reason.
+
+### Docs
+- **ADOPTION.md §3 step 1** now shows the mixed-teardown pattern. Real `OnDestroy` bodies mix
+  `IDisposable` services, MonoBehaviours with a `Dispose()` method that do not implement the
+  interface, and plain cleanup (an unsubscribe, a `Cleanup()` call). `scope.Register` takes only the
+  first; the rest go through `scope.OnDisposed(...)`. Without this a first-time adopter hits a compile
+  error on `Register(monoBehaviour)` and cannot tell why.
+
 ## [1.0.0] - 2026-07-26
 
 The toolkit's best asset was never the API — it was the *method* in the two field guides: how to walk
