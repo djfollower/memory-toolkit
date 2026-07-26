@@ -2,8 +2,8 @@
 
 ## [1.1.0] - 2026-07-26
 
-Two analyzer rules the Melon dogfood proved were worth building — both catching hazards the field
-guides name as central but that no tool covered. Each shipped only after measuring its false-positive
+Two analyzer rules that dogfooding the adoption arc on a production project proved were worth
+building — both catching hazards the field guides name as central but that no tool covered. Each shipped only after measuring its false-positive
 rate against the two production codebases the guides are built on.
 
 ### Added
@@ -81,10 +81,10 @@ triage the next project.
 ### Notes
 - **Acceptance was a run against the two real codebases the guides are built on**, not a synthetic
   scene. Cold, the shipped triage reproduces their documented scope maps: the greenfield merge game
-  resolves to ADOPT (568 files, 121 Instantiate, exactly 1 file mentioning a pool, `AppLoader` as the
-  Permanent owner, `GameplayManager` among the session boundaries); the brownfield card game resolves
-  to INTEGRATE (`GameInitFlowManager` as the boot entry, ~400 pool-mentioning files detected as the
-  incumbent). The one imperfect number is the Update census — the regex counts every `void Update(`
+  resolves to ADOPT (568 files, 121 Instantiate, exactly 1 file mentioning a pool, its app-loader as
+  the Permanent owner, its gameplay-manager class among the session boundaries); the brownfield card
+  game resolves to INTEGRATE (its init-flow manager as the boot entry, ~400 pool-mentioning files
+  detected as the incumbent). The one imperfect number is the Update census — the regex counts every `void Update(`
   under `Assets`, so it runs higher than the guide's hand-count of gameplay Updates; FixedUpdate
   matched exactly. Triage is heuristic and labelled as such: every candidate carries its file and
   line, and assigning the final lifetimes stays the human decision.

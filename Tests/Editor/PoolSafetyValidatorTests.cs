@@ -81,7 +81,7 @@ namespace MemoryToolkit.Tests
             Assert.That(HasIssue(PoolSafetyValidator.Severity.Warning, "declares OnDestroy"), Is.True);
         }
 
-        // The framework-noise regression from the Melon dogfood needs a real UGUI type
+        // The framework-noise regression from the production-project dogfood needs a real UGUI type
         // to exercise, so it lives in its own UGUI-gated test assembly
         // (Tests/Editor/UGUI/) rather than here — the main test assembly must compile
         // in a project that has no com.unity.ugui.

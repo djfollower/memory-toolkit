@@ -104,15 +104,15 @@ codebases — the same two the field guides are built on — not a judgement cal
 | Greenfield merge/puzzle game | 1,867 | 16 | 4 | 1 | 0 | 42 |
 | Brownfield card game | 5,874 | 761 | 7 | 0 | 0 | 818 |
 
-MTK006's one greenfield finding is an `AddComponent<TargetJoint2D>()` inside an `Update()` — a true
+MTK006's one greenfield finding is an `AddComponent` for a joint inside an `Update()` — a true
 positive, adding a joint every frame while dragging. Zero findings on the 5,874-file brownfield
 project (which already pools) is the precision signal that the OnEnable/Update scoping holds.
 
 MTK008 reads zero on both because neither project has adopted `IPoolable` — which is the gate working,
-not a blind spot. Adopting `IPoolable` on the greenfield project's `Piece` (its actual base class)
-immediately raised MTK008 on `Piece.OnDestroy` and its subclasses' — the DOKill, event unsubscribe
-and modifier-dispose cleanup ADOPTION §4 walks through — and on nothing else in the ~1,900-file
-project. Signal exactly where pooling was adopted, silence everywhere else.
+not a blind spot. Adopting `IPoolable` on the greenfield project's own piece base class immediately
+raised MTK008 on that class's `OnDestroy` and its subclasses' — the DOKill, event unsubscribe and
+modifier-dispose cleanup ADOPTION §4 walks through — and on nothing else in the ~1,900-file project.
+Signal exactly where pooling was adopted, silence everywhere else.
 
 Every MTK001, MTK002 and MTK006 finding reviewed was a true positive — including, in the greenfield project,
 one file that guards `_timeline` with `if (_timeline != null)` on one line and calls `_timeline?.Play()`

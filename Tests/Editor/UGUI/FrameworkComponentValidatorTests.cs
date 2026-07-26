@@ -8,7 +8,7 @@ using Object = UnityEngine.Object;
 namespace MemoryToolkit.Tests
 {
     /// <summary>
-    /// The framework-noise regression from the Melon dogfood. Needs a real UGUI type
+    /// The framework-noise regression from the production-project dogfood. Needs a real UGUI type
     /// to exercise, so it is isolated in a UGUI-gated assembly — the main test
     /// assembly must compile in a project without com.unity.ugui.
     ///
