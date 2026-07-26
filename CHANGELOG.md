@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.12.0] - 2026-07-26
+
+The field guides describe call-site failures in prose, and prose does not survive contact with a
+thirty-person team. This release moves the highest-confidence rules into a Roslyn analyzer, where they
+carry an ID that can be suppressed per line, tracked in review, and enforced at the moment of writing
+rather than at review.
+
+### Added
+- **`MemoryToolkit.Analyzers`** — a Roslyn analyzer DLL Unity loads automatically (the
+  `RoslynAnalyzer` label is set; nothing to install). Three rules:
+  - **MTK001** (Warning, on) — `?.`, `??`, `??=` and `is null` on a `UnityEngine.Object`. Each
+    compiles to a reference comparison that skips Unity's overloaded `==`, so a destroyed object
+    passes as alive. The most common bug at a pool boundary, and invisible in review because it is
+    correct C# for every non-Unity type in the same file.
+  - **MTK002** (Warning, on) — allocation in `Update` / `LateUpdate` / `FixedUpdate` on a
+    MonoBehaviour: collections, arrays, string interpolation/concatenation, LINQ, and Unity yield
+    instructions. Deliberately does not flag structs (`new Vector3(...)`) or `Update` on a non-
+    MonoBehaviour.
+  - **MTK007** (off by default) — a `UnityEngine.Object` used after an `await` without a re-check,
+    the pooled-reference-outlives-its-owner hazard.
+- **[`docs/ANALYZER.md`](docs/ANALYZER.md)** — rules, the `.editorconfig` knobs, and the measured
+  false-positive results the on/off split is based on.
+
+### Notes
+- **The default split is empirical, not a judgement call.** Measured against the two production
+  codebases the field guides are built on: MTK001 found 16 (greenfield) and 761 (brownfield), MTK002
+  found 4 and 7 — every reviewed finding a true positive, including a file that guards `_timeline`
+  with `if (_timeline != null)` on one line and `_timeline?.Play()` on another. MTK007 found 42 and
+  818, which is not a bug rate — it measures how often code touches a Unity object after an await,
+  most of it fine. On by default it would get the whole analyzer switched off within a day and take
+  MTK001/MTK002 with it, so it ships off.
+- Built against netstandard2.0 and Roslyn 3.8 on purpose: Unity loads analyzers into its own Roslyn
+  host, and building against a newer compiler than the host provides is the usual cause of an
+  analyzer that is silently ignored. Verified loading and warning inside Unity 6000.3, not just in
+  unit tests.
+- Source and tests live in `Analyzers~/` (the trailing tilde keeps Unity from importing the C#
+  project as game code); the shipped artifact is `Analyzers/MemoryToolkit.Analyzers.dll`.
+
 ## [0.11.0] - 2026-07-23
 
 `CreateSceneScope()` assumed scenes are how a project ends things, and that a scope can be created

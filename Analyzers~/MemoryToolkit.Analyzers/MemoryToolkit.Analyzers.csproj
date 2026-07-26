@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- netstandard2.0 is required: Unity loads analyzers into its own Roslyn host. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <AssemblyName>MemoryToolkit.Analyzers</AssemblyName>
+    <RootNamespace>MemoryToolkit.Analyzers</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 3.8 is the floor Unity documents for analyzer compatibility; building against
+         a newer Roslyn than the host loads is the usual cause of a silently ignored
+         analyzer, and a rule nobody sees is worse than one that was never written. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+</Project>

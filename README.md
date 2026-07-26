@@ -227,6 +227,19 @@ For projects without a container, `AttachTo(gameObject)`, `AttachTo(scene)` and
 Addressables scene load, a flow manager's event, a match that ends without a scene change. See
 [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md).
 
+## Catching the call-site bugs as you type
+
+The field guides' call-site rules ship as a Roslyn analyzer Unity loads automatically — enforcement at
+compile time instead of in a review. Two rules are on by default, both measured to zero false
+positives across two production codebases:
+
+- **MTK001** — `?.` / `??` / `is null` on a `UnityEngine.Object`, which bypasses Unity's overloaded
+  `==` and treats a destroyed object as alive.
+- **MTK002** — allocation in `Update` / `LateUpdate` / `FixedUpdate`.
+
+A third (use-after-`await`) ships off, because its finding count measures how often code awaits near a
+Unity object, not how often that is a bug. See [`docs/ANALYZER.md`](docs/ANALYZER.md).
+
 ## Budgets, and the build farm
 
 Warm-up counts and arena sizes belong in an asset, not in an installer: a single warm-up number is

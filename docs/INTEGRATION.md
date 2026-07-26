@@ -389,20 +389,27 @@ scoped below.
    **`MemoryScope.TryGetPool`** additionally makes "is this prefab already pooled?" answerable without
    creating a pool as a side effect of asking.
 
-### Still open: the call-site validator
+### The call-site validator, partly closed
 
 `PoolSafetyValidator` checks prefabs, not the code that pools them. It would have caught the 17
 `stopAction: 2` prefabs. It would not have caught failures B, D, or E — all of which are call-site and
-infrastructure patterns, and all of which are statically greppable:
+infrastructure patterns.
 
-- `?.` applied to a `UnityEngine.Object` at a pool boundary (failure D)
+Failure D — `?.` applied to a `UnityEngine.Object` at a pool boundary — is now caught by the Roslyn
+analyzer as **MTK001** (see [`ANALYZER.md`](ANALYZER.md)). This exact codebase is one of the two it
+was measured against: the scan found 761 instances of the pattern, every reviewed one a true positive.
+The obstacle was always precision, since these are source patterns rather than asset data; a real
+syntax pass over the type of each expression is what makes MTK001 shippable where a grep for `?.` was
+not.
+
+Two remain unaddressed, and honestly so — both need to understand a pool API this analyzer does not
+know the shape of:
+
 - release paths that skip reparenting (failure B)
 - pool keys derived from a loaded asset's runtime identity (failure E)
 
-The prefab validator's premise — these bugs surface far from their cause, so catch them statically —
-applies at least as strongly here. The obstacle is precision: these are source patterns rather than
-asset data, so the check needs a real syntax pass to avoid the false positives that get a validator
-switched off. Worth doing, not worth doing badly.
+These are worth doing as project-specific rules once a team has a stable pool facade; a general
+package cannot know which method is "release" in a given codebase without being told.
 
 ---
 

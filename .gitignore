@@ -11,3 +11,8 @@ docs/.private/
 # are shipped content; re-include them.
 !Samples~/
 !Tools~/
+!Analyzers~/
+
+# ...but not the analyzer's build output, which is regenerated into Analyzers/.
+Analyzers~/**/bin/
+Analyzers~/**/obj/

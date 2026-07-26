@@ -20,7 +20,7 @@ can read or write.**
 | 0 | 0.9.0 ✅ | **A** — Shadow mode | No dependencies, smallest, and it is what gets the rest funded. Produces the number that justifies a migration sprint before anyone changes a call site. |
 | 1 | 0.10.0 ✅ | **B** — Budgets as data → **C** — Headless gate | B defines the schema C asserts against. Build as one unit; separately they cost more. |
 | 2 | 0.11.0 ✅ | **D** — DI / lifecycle adapters | Decides whether adoption is a one-line installer change or an architecture argument. Needs nothing from 0–1, but is worth less before budgets exist (the installer line is `ApplyBudget`). |
-| 3 | 0.12.0 | **E** — Roslyn analyzer | Independent but expensive, and the one most likely to be switched off if rushed. Wants the reference projects free for false-positive measurement. |
+| 3 | 0.12.0 ✅ | **E** — Roslyn analyzer | Independent but expensive, and the one most likely to be switched off if rushed. Wants the reference projects free for false-positive measurement. |
 | 4 | 0.13.0 | **F** — Device, soak, field telemetry | Reuses C's JSON reader and B's ceilings. Real memory bugs are field bugs, so this is where the toolkit stops being an Editor tool. |
 | 5 | 1.0.0 | **G** — Agent triage over MCP | Last deliberately: it should encode the *stabilized* budget + validator surfaces, not chase them. |
 
