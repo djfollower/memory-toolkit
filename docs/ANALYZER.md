@@ -16,9 +16,11 @@ Console, at compile time — enforcement at the moment of writing rather than at
 |---|---|---|
 | **MTK001** | `?.`, `??`, `??=`, `is null` on a `UnityEngine.Object` | **Warning (on)** |
 | **MTK002** | Allocation in `Update` / `LateUpdate` / `FixedUpdate` | **Warning (on)** |
+| **MTK006** | `AddComponent` in `OnEnable` or the Update family | **Warning (on)** |
+| **MTK008** | An `IPoolable` type declares `OnDestroy` | **Warning (on)** |
 | **MTK007** | `UnityEngine.Object` used after an `await` without a re-check | Off |
 
-Two are on by default; one is off. The split is not caution for its own sake — it is the empirical
+Four are on by default; one is off. The split is not caution for its own sake — it is the empirical
 result below.
 
 ### MTK001 — null-check that bypasses Unity's lifetime check
@@ -50,6 +52,35 @@ enumerator per call), and Unity's yield instructions (cache one — they are imm
 flag `new Vector3(...)` or any other struct, and it only fires on a `MonoBehaviour` — a service with
 a method called `Update` does not run every frame.
 
+### MTK006 — AddComponent that accumulates under pooling
+
+`AddComponent` allocates and has no cheap inverse, so a component added on each reuse is never
+removed — the "single largest refactor" hazard of `docs/ADOPTION.md` §4. The rule fires only where
+the addition is provably more than once per instance: `OnEnable` (every pool take) and the Update
+family (every frame).
+
+It deliberately does **not** flag `Awake` or `Start`. Those run once per instance and the component
+persists across reuse — which is exactly what the guide recommends ("components at author time").
+Flagging them would punish the correct pattern. The general case the guide describes — a custom
+setup method called on every spawn — needs project knowledge to identify and is left to the §4
+checklist; MTK006 takes the subset that is decidable from the method alone.
+
+On by default: there is no correct reason to `AddComponent` every frame or every enable, so the
+precision is high — see the measured results below.
+
+### MTK008 — a pooled type's OnDestroy cleanup
+
+`docs/ADOPTION.md` §4 calls this the highest-value pooling check, and the prefab validator cannot make
+it — the validator reads prefab data, not method bodies. Under pooling, `OnDestroy` runs only when the
+pool is torn down, not on each release, so per-use cleanup there (event unsubscribes, tween kills,
+coroutine stops) silently stops. It has to move to `OnReturnedToPool`.
+
+The precision is the gate: the rule fires only on types that implement `IPoolable` — types that opted
+into pooling, where `OnDestroy` genuinely no longer runs on the hot path. Nearly every MonoBehaviour
+has a legitimate `OnDestroy`, so an unconditional rule would be pure noise; gated on `IPoolable`, a
+project that has not adopted the toolkit sees none of these. An empty `OnDestroy` is not flagged —
+there is nothing to lose.
+
 ### MTK007 — use after await
 
 Pooling breaks the rule that a non-null reference is still yours. Across an `await` the target may
@@ -68,12 +99,22 @@ you have seen your own noise level.
 The ship gate for these rules was a measured false-positive rate against two real production
 codebases — the same two the field guides are built on — not a judgement call.
 
-| | Files | MTK001 | MTK002 | MTK007 |
-|---|---|---|---|---|
-| Greenfield merge/puzzle game | 1,867 | 16 | 4 | 42 |
-| Brownfield card game | 5,874 | 761 | 7 | 818 |
+| | Files | MTK001 | MTK002 | MTK006 | MTK008 | MTK007 |
+|---|---|---|---|---|---|---|
+| Greenfield merge/puzzle game | 1,867 | 16 | 4 | 1 | 0 | 42 |
+| Brownfield card game | 5,874 | 761 | 7 | 0 | 0 | 818 |
 
-Every MTK001 and MTK002 finding reviewed was a true positive — including, in the greenfield project,
+MTK006's one greenfield finding is an `AddComponent<TargetJoint2D>()` inside an `Update()` — a true
+positive, adding a joint every frame while dragging. Zero findings on the 5,874-file brownfield
+project (which already pools) is the precision signal that the OnEnable/Update scoping holds.
+
+MTK008 reads zero on both because neither project has adopted `IPoolable` — which is the gate working,
+not a blind spot. Adopting `IPoolable` on the greenfield project's `Piece` (its actual base class)
+immediately raised MTK008 on `Piece.OnDestroy` and its subclasses' — the DOKill, event unsubscribe
+and modifier-dispose cleanup ADOPTION §4 walks through — and on nothing else in the ~1,900-file
+project. Signal exactly where pooling was adopted, silence everywhere else.
+
+Every MTK001, MTK002 and MTK006 finding reviewed was a true positive — including, in the greenfield project,
 one file that guards `_timeline` with `if (_timeline != null)` on one line and calls `_timeline?.Play()`
 on another. That is the whole case for the rule: the correct form and the broken form sitting in the
 same file, indistinguishable to a reviewer.

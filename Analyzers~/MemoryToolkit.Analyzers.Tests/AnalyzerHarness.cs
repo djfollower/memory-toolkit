@@ -35,14 +35,25 @@ namespace UnityEngine
         public override int GetHashCode() => 0;
     }
 
-    public class Component : Object { public Transform transform; }
+    public class Component : Object { public Transform transform; public GameObject gameObject; }
     public class Behaviour : Component { }
     public class MonoBehaviour : Behaviour { }
     public class Transform : Component { public void SetParent(Transform p) { } }
-    public class GameObject : Object { public T GetComponent<T>() => default; }
+    public class Rigidbody : Component { }
+    public class GameObject : Object { public T GetComponent<T>() => default; public T AddComponent<T>() where T : Component => default; }
     public struct Vector3 { public float x, y, z; public Vector3(float a, float b, float c) { x = a; y = b; z = c; } }
     public class WaitForSeconds { public WaitForSeconds(float s) { } }
     public class Debug { public static void Log(object o) { } }
+}
+
+namespace MemoryToolkit.Pooling
+{
+    // Mirrors the real interface by full name — which is all the analyzer matches on.
+    public interface IPoolable
+    {
+        void OnTakenFromPool();
+        void OnReturnedToPool();
+    }
 }
 ";
 

@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.1.0] - 2026-07-26
+
+Two analyzer rules the Melon dogfood proved were worth building — both catching hazards the field
+guides name as central but that no tool covered. Each shipped only after measuring its false-positive
+rate against the two production codebases the guides are built on.
+
+### Added
+- **MTK006 — AddComponent that accumulates under pooling** (Warning, on). `AddComponent` has no cheap
+  inverse, so one added on each reuse is never removed — ADOPTION §4's "single largest refactor"
+  hazard. Fires only where the addition is provably more than once per instance: `OnEnable` (every
+  pool take) and the Update family (every frame). Deliberately **not** `Awake`/`Start`, which run once
+  per instance and are the correct, pooling-safe place. Measured: 1 true positive on the greenfield
+  project (an `AddComponent` in `Update`), 0 on the 5,874-file brownfield project.
+- **MTK008 — a pooled type's OnDestroy cleanup** (Warning, on). Under pooling `OnDestroy` runs only at
+  pool teardown, not per release, so per-use cleanup there silently stops. The highest-value check in
+  ADOPTION §4, and one the prefab validator cannot make because it reads prefab data, not method
+  bodies. **Precision comes from the gate:** it fires only on types implementing `IPoolable`, so a
+  project that has not adopted the toolkit sees none of these. Verified by adopting `IPoolable` on the
+  greenfield project's real `Piece` base — MTK008 immediately flagged `Piece.OnDestroy` (its DOKill /
+  event / modifier-dispose cleanup) and its subclasses, and nothing else in ~1,900 files.
+
+### Fixed
+- **The package's test assembly no longer hard-requires `com.unity.ugui`.** The 1.0.1 validator
+  regression test used `UnityEngine.UI.Image`, which broke compilation in any project without UGUI.
+  The UGUI-dependent tests now live in a separate `com.unity.ugui`-gated test assembly
+  (`Tests/Editor/UGUI/`), mirroring the DI integration-test pattern; the main suite compiles with or
+  without UGUI (verified both ways: 171 tests with, 160 without, zero compile errors).
+
 ## [1.0.1] - 2026-07-26
 
 Papercuts from dogfooding the 1.0 adoption arc end to end on a real production project (a shipped

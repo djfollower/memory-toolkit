@@ -41,6 +41,24 @@ namespace MemoryToolkit.Analyzers
         }
 
         /// <summary>
+        /// True when <paramref name="type"/> implements the toolkit's
+        /// <c>MemoryToolkit.Pooling.IPoolable</c>. Matched by name because the analyzer
+        /// does not reference the runtime — but the analyzed project does, so the
+        /// symbol is present in its compilation.
+        /// </summary>
+        internal static bool ImplementsIPoolable(ITypeSymbol type)
+        {
+            if (type == null) return false;
+
+            foreach (INamedTypeSymbol i in type.AllInterfaces)
+            {
+                if (i.ToDisplayString() == "MemoryToolkit.Pooling.IPoolable") return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// The Unity messages that run every frame. Not <c>OnGUI</c>: it runs several
         /// times per frame but is already understood to be slow, and flagging it
         /// would bury the rule in findings from editor-only UI code.

@@ -1,9 +1,10 @@
 {
-    "name": "MemoryToolkit.Tests",
+    "name": "MemoryToolkit.Tests.UGUI",
     "rootNamespace": "MemoryToolkit.Tests",
     "references": [
         "MemoryToolkit.Runtime",
         "MemoryToolkit.Editor",
+        "UnityEngine.UI",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
@@ -18,8 +19,15 @@
     ],
     "autoReferenced": false,
     "defineConstraints": [
-        "UNITY_INCLUDE_TESTS"
+        "UNITY_INCLUDE_TESTS",
+        "MEMORYTOOLKIT_UGUI"
     ],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.ugui",
+            "expression": "1.0.0",
+            "define": "MEMORYTOOLKIT_UGUI"
+        }
+    ],
     "noEngineReferences": false
 }

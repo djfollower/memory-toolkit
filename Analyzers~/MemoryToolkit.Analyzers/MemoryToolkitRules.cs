@@ -58,6 +58,49 @@ namespace MemoryToolkit.Analyzers
             helpLinkUri: DocsUrl + "mtk002");
 
         /// <summary>
+        /// MTK006 — AddComponent in a method that runs more than once per instance, so
+        /// under pooling the components accumulate. On by default: the flagged
+        /// locations (OnEnable, the Update family) are provably per-reuse, so there is
+        /// no correct reason to AddComponent there.
+        /// </summary>
+        internal static readonly DiagnosticDescriptor AddComponentOnReuse = new(
+            id: "MTK006",
+            title: "AddComponent in a method that runs more than once per instance",
+            messageFormat:
+                "AddComponent in {0} runs on every {1}; under pooling the instance accumulates a component per " +
+                "reuse. Add it at author time (a serialized reference) and re-Init on take instead.",
+            category: PoolingCategory,
+            defaultSeverity: DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            description:
+                "AddComponent has no cheap inverse, so a component added on each reuse is never removed. Awake and " +
+                "Start are safe (once per instance); OnEnable fires on every pool take and the Update family every " +
+                "frame. A setup method called on every spawn has the same problem but needs project knowledge to " +
+                "spot — see the pooling checklist in docs/ADOPTION.md §4.",
+            helpLinkUri: DocsUrl + "mtk006");
+
+        /// <summary>
+        /// MTK008 — an IPoolable type declares OnDestroy. Under pooling OnDestroy runs
+        /// only at pool teardown, not per release, so per-use cleanup there silently
+        /// stops. On by default: the IPoolable gate is the precision — a project that
+        /// has not adopted pooling sees none of these.
+        /// </summary>
+        internal static readonly DiagnosticDescriptor PoolableOnDestroyCleanup = new(
+            id: "MTK008",
+            title: "IPoolable type declares OnDestroy",
+            messageFormat:
+                "'{0}' is IPoolable but declares OnDestroy. Under pooling OnDestroy runs only at pool teardown, so " +
+                "its cleanup stops happening per release. Mirror it in OnReturnedToPool, reviewed line by line.",
+            category: PoolingCategory,
+            defaultSeverity: DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            description:
+                "The highest-value pooling check and the one the prefab validator cannot make, because it reads " +
+                "prefab data, not method bodies. Gated on IPoolable so it fires only on types that opted into " +
+                "pooling — where OnDestroy genuinely no longer runs on the release path (docs/ADOPTION.md §4).",
+            helpLinkUri: DocsUrl + "mtk008");
+
+        /// <summary>
         /// MTK007 — off by default. Needs to know which awaits can outlive their
         /// target, which is project knowledge, so it is noisy until a team scopes it.
         /// </summary>

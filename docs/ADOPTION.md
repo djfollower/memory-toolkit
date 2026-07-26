@@ -198,7 +198,10 @@ Where components genuinely vary per instance (here, piece modifiers chosen by co
 needs a teardown pass that costs more than the instantiate you saved.
 
 This is usually the single largest refactor in adopting pooling, and it is worth scoping explicitly
-before committing to a sprint.
+before committing to a sprint. The analyzer catches the provable slice of it — **MTK006** flags
+`AddComponent` in `OnEnable` or the Update family, where it runs on every reuse (see
+[`ANALYZER.md`](ANALYZER.md)); the setup-method case still needs a human, because knowing a method
+runs per-spawn needs project knowledge.
 
 ### Reset is not "set fields to default" — it is "undo every subscription"
 
@@ -218,6 +221,9 @@ With pooling, `OnDestroy` **stops running**. Everything in it must move to `OnRe
 
 **Rule: a pooled type's `OnReturnedToPool` should be reviewable against its old `OnDestroy` line by
 line.** If your codebase's `OnDestroy` was doing real work, that work does not disappear — it moves.
+Once a type implements `IPoolable`, **MTK008** flags any `OnDestroy` it still declares, so the review
+above is prompted the moment you opt the type into pooling rather than left to memory
+(see [`ANALYZER.md`](ANALYZER.md)).
 
 ### Identity keyed on `GetHashCode` is a pooling hazard
 

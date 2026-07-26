@@ -246,14 +246,17 @@ Addressables scene load, a flow manager's event, a match that ends without a sce
 ## Catching the call-site bugs as you type
 
 The field guides' call-site rules ship as a Roslyn analyzer Unity loads automatically — enforcement at
-compile time instead of in a review. Two rules are on by default, both measured to zero false
+compile time instead of in a review. Four rules are on by default, each measured to zero false
 positives across two production codebases:
 
 - **MTK001** — `?.` / `??` / `is null` on a `UnityEngine.Object`, which bypasses Unity's overloaded
   `==` and treats a destroyed object as alive.
 - **MTK002** — allocation in `Update` / `LateUpdate` / `FixedUpdate`.
+- **MTK006** — `AddComponent` in `OnEnable` or the Update family, which accumulates under pooling.
+- **MTK008** — an `IPoolable` type declaring `OnDestroy`, whose cleanup stops running per release
+  (gated on `IPoolable`, so it's silent until you adopt pooling).
 
-A third (use-after-`await`) ships off, because its finding count measures how often code awaits near a
+A fifth (use-after-`await`) ships off, because its finding count measures how often code awaits near a
 Unity object, not how often that is a bug. See [`docs/ANALYZER.md`](docs/ANALYZER.md).
 
 ## Budgets, and the build farm
